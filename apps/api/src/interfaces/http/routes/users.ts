@@ -58,9 +58,21 @@ export function registerUserRoutes(app: FastifyInstance, container: Container) {
   });
 
   app.post("/users/:id/deactivate", { preHandler: app.authenticate }, async (request, reply) => {
-    const { id } = idSchema.parse(request.params);
+    const { id } = request.params as { id: string };
     return reply.send(await container.user.setActive(request.actor!, id, false));
   });
+
+  // Owner request: terminated users keep their records but can no longer
+  // log in; the UI renders their name struck through. Admin-only action.
+  app.post(
+    "/users/:id/terminate",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = z.object({ reason: z.string().nullable().optional() }).parse(request.body ?? {});
+      return reply.send(await container.user.terminate(request.actor!, id, body.reason ?? null));
+    },
+  );
 
   app.delete("/users/:id", { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = idSchema.parse(request.params);

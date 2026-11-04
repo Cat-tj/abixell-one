@@ -57,5 +57,7 @@ export interface UserRepository {
     currentPassword?: string,
   ): Promise<User>;
   setActive(id: string, isActive: boolean, actor: LifecycleActor): Promise<User>;
+  /** Hard stop: status='terminated', sessions+refresh tokens revoked. */
+  terminate(id: string, actor: LifecycleActor, reason: string | null): Promise<User>;
   softDelete(id: string, actor: LifecycleActor): Promise<User>;
 }

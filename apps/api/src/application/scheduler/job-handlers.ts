@@ -37,6 +37,9 @@ export function registerJobHandlers(
     serviceQuality: ServiceQualityService;
     accountingEventConsumer: AccountingEventConsumerJob;
     survey: SurveyService;
+    /** Daily backup: shells out to scripts/backup-postgres.mjs. Absent
+     * tooling/paths surface as a failed run, never a silent skip. */
+    backupRunner: () => Promise<{ backupId: string; durationMs: number }>;
   },
 ): void {
   scheduler.registerHandler("workflow-escalation-sweep", async ({ actor }) => {
@@ -178,6 +181,21 @@ export function registerJobHandlers(
       tenantsSwept: tenants.length,
       totalExpired,
       ...(actor ? {} : { perTenant }),
+    };
+  });
+  // Owner request: daily backup + offsite rclone. The job reuses the
+  // production backup script (pg_dump custom+zstd, documents archive,
+  // manifest, SHA256) instead of a parallel implementation. Offsite copy
+  // stays a host-side rclone step over BACKUP_ROOT (see the migration's
+  // comment and the DR runbook §7A.3) — cloud credentials never enter the
+  // API container. Disabled by default; an operator enables it on a
+  // deployment that actually has the CLI tooling mounted.
+  scheduler.registerHandler("daily-backup", async () => {
+    const result = await deps.backupRunner();
+    return {
+      backupId: result.backupId,
+      durationMs: result.durationMs,
+      note: "Offsite copy: host-side rclone over BACKUP_ROOT (runbook §7A.3)",
     };
   });
 }

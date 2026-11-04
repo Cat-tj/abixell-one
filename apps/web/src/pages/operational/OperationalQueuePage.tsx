@@ -81,6 +81,7 @@ export function OperationalQueuePage() {
       cell: (i) => <span className="font-mono font-medium text-slate-800">{i.complaint.complaintNumber}</span>,
     },
     { header: t("ops.queue.h.customer"), cell: (i) => i.customerName ?? "—" },
+    { header: t("ops.queue.h.site"), cell: (i) => i.siteName ?? "—" },
     { header: t("ops.queue.h.category"), cell: (i) => <Badge>{i.complaint.category}</Badge> },
     {
       header: t("ops.queue.h.severity"),

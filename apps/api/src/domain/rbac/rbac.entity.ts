@@ -410,6 +410,10 @@ export interface RbacRepository extends RoleDefinitionRepository {
   findRoleByCode(tenantId: string, code: string): Promise<Role | null>;
   /** Provisioning read/write: activate every module for a fresh Tenant. */
   activateAllModulesForTenant(tenantId: string): Promise<void>;
+  /** Included-role closure (AD_Role_Included parity). */
+  resolveIncludedRoleIds(tenantId: string, roleId: string): Promise<string[]>;
+  /** Window access union across a role and its included roles. */
+  getWindowAccessForRole(tenantId: string, roleId: string): Promise<{ windowCode: string; isReadWrite: boolean; accessTypes: string[] }[]>;
   /** `tenantId` is required because this writer serializes on the tenant row:
    * `user_role_assignments.role_id` is ON DELETE CASCADE, so an assignment
    * inserted outside that lock can be silently cascaded away by a concurrent

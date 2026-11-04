@@ -459,6 +459,10 @@ export const id: Record<MessageKey, string> = {
   "adminUsers.moreCount": "+{count} lagi",
   "adminUsers.viewAccess": "Lihat akses",
   "adminUsers.assignAccess": "Beri akses",
+  "adminUsers.terminate": "Terminasi",
+  "adminUsers.terminateConfirm": "Terminasi {name}? Dia tidak bisa login lagi. Datanya tetap tersimpan.",
+  "adminUsers.terminated": "{name} diterminasi.",
+  "adminUsers.terminateFailed": "Terminasi gagal.",
   "adminUsers.page": "Halaman {page} dari {total}",
   "adminUsers.previous": "Sebelumnya",
   "adminUsers.next": "Berikutnya",
@@ -3766,6 +3770,7 @@ export const id: Record<MessageKey, string> = {
   "ops.queue.h.category": "Kategori",
   "ops.queue.h.created": "Dibuat",
   "ops.queue.h.customer": "Pelanggan",
+    "ops.queue.h.site": "Lokasi",
   "ops.queue.h.number": "Nomor",
   "ops.queue.h.severity": "Tingkat Keparahan",
   "ops.queue.h.status": "Status",
@@ -4659,6 +4664,9 @@ export const id: Record<MessageKey, string> = {
 
   // ------------------------------ Tab Cadangan
   "backup.loadFailed": "Gagal memuat tugas cadangan",
+  "backup.offsite.title": "Salinan offsite (rclone)",
+  "backup.offsite.desc": "Job backup harian menghasilkan set ber-checksum di BACKUP_ROOT pada host. Dorong ke offsite dari host — kredensial cloud tidak pernah masuk container API. Saat memulihkan, gunakan rclone copy, bukan rclone sync.",
+  "backup.offsite.command": "rclone copy $BACKUP_ROOT gdrive-abixell:abixell-one-backups/ --transfers 4",
   "backup.loading": "Memuat tugas cadangan…",
   "backup.emptyTitle": "Tidak ada tugas cadangan",
   "backup.emptyDesc": "Tidak ada tugas cadangan yang dikonfigurasi untuk tenant ini.",

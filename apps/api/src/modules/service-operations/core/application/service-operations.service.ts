@@ -364,6 +364,11 @@ export class ServiceOperationsService {
     },
   ): Promise<WorkOrder> {
     await this.rbac.requirePermission(actor, "service_operations.manage");
+    // Owner request: WO isolation decided at creation. A project-bound WO
+    // requires the creator to be an explicit project member.
+    if (input.projectId && !(await this.repo.isProjectMember(actor.tenantId, input.projectId, actor.userId))) {
+      throw new ConflictError("Only a member of the project can create Work Orders in it");
+    }
     const customer = await this.customers.getAuthorized(actor, input.customerId);
     const definition = await this.getActiveServiceDefinitionOrThrow(actor.tenantId, input.serviceDefinitionCode);
     return this.createWorkOrderInternal(actor, {
@@ -1374,13 +1379,55 @@ export class ServiceOperationsService {
 
   /** Coordinator/supervisor queue. Scoped to the customers the actor's Data
    * Scope covers. */
+  // --- Project membership (owner request) --------------------------------
+
+  async listProjectMembers(actor: ActorContext, projectId: string) {
+    await this.rbac.requirePermission(actor, "service_operations.read");
+    return this.repo.listProjectMembers(actor.tenantId, projectId);
+  }
+
+  async addProjectMember(actor: ActorContext, projectId: string, userId: string, roleCode: string | null) {
+    await this.rbac.requirePermission(actor, "service_operations.manage");
+    await this.repo.addProjectMember(actor.tenantId, projectId, userId, roleCode, actor.userId);
+    await this.audit.record({
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      action: "project.member_added",
+      entityType: "project",
+      entityId: projectId,
+      metadata: { userId, roleCode },
+    });
+  }
+
+  async removeProjectMember(actor: ActorContext, projectId: string, userId: string) {
+    await this.rbac.requirePermission(actor, "service_operations.manage");
+    await this.repo.removeProjectMember(actor.tenantId, projectId, userId, actor.userId);
+    await this.audit.record({
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      action: "project.member_removed",
+      entityType: "project",
+      entityId: projectId,
+      metadata: { userId },
+    });
+  }
   async listWorkOrders(
     actor: ActorContext,
     filter: { siteId?: string; status?: "open" | "completed" } = {},
   ): Promise<{ workOrder: WorkOrder; status: EntityWorkflowStatus | null }[]> {
     await this.rbac.requirePermission(actor, "service_operations.read");
     const customerIds = await this.customers.listScopedCustomerIds(actor);
-    const orders = await this.repo.listWorkOrders(actor.tenantId, { customerIds, siteId: filter.siteId });
+    const all = await this.repo.listWorkOrders(actor.tenantId, { customerIds, siteId: filter.siteId });
+    // Owner request: WO isolation. Tenant-wide readers (admins) see
+    // everything; org/customer-scoped actors see WOs without a project, plus
+    // WOs of projects they are an explicit member of.
+    let orders = all;
+    if (actor.scopeType !== "tenant") {
+      const memberOf = await this.repo.listUserProjectIds(actor.tenantId, actor.userId);
+      orders = all.filter(
+        (row) => row.projectId == null || memberOf.has(row.projectId),
+      );
+    }
     const rows = await this.withStatus(actor, orders);
     if (!filter.status) return rows;
     // "open" → in_progress; "completed" → approved (workflow terminal state).

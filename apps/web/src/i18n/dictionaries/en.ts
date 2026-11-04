@@ -450,6 +450,10 @@ export const en = {
   "adminUsers.moreCount": "+{count} more",
   "adminUsers.viewAccess": "View access",
   "adminUsers.assignAccess": "Assign access",
+  "adminUsers.terminate": "Terminate",
+  "adminUsers.terminateConfirm": "Terminate {name}? They will no longer be able to sign in. Their records stay.",
+  "adminUsers.terminated": "{name} terminated.",
+  "adminUsers.terminateFailed": "Terminate failed.",
   "adminUsers.page": "Page {page} of {total}",
   "adminUsers.previous": "Previous",
   "adminUsers.next": "Next",
@@ -3789,6 +3793,7 @@ export const en = {
   "ops.queue.h.category": "Category",
   "ops.queue.h.created": "Created",
   "ops.queue.h.customer": "Customer",
+    "ops.queue.h.site": "Site",
   "ops.queue.h.number": "Number",
   "ops.queue.h.severity": "Severity",
   "ops.queue.h.status": "Status",
@@ -4682,6 +4687,9 @@ export const en = {
 
   // ------------------------------ Backup tab
   "backup.loadFailed": "Failed to load backup jobs",
+  "backup.offsite.title": "Offsite copy (rclone)",
+  "backup.offsite.desc": "The daily backup job produces a checksummed set under BACKUP_ROOT on the host. Push it offsite from the host — cloud credentials never enter the API container. Never use rclone sync when pulling back for recovery; use rclone copy.",
+  "backup.offsite.command": "rclone copy $BACKUP_ROOT gdrive-abixell:abixell-one-backups/ --transfers 4",
   "backup.loading": "Loading backup jobs…",
   "backup.emptyTitle": "No backup jobs",
   "backup.emptyDesc": "No backup jobs are configured for this tenant.",

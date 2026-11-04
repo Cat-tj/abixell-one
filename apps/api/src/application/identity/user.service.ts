@@ -164,6 +164,23 @@ export class UserService {
     return this.repo.setActive(id, isActive, actor);
   }
 
+  /**
+   * Terminate (owner request): hard stop distinct from deactivate. Login
+   * denied, sessions revoked, records retained — see repo.terminate.
+   */
+  async terminate(actor: ActorContext, id: string, reason: string | null) {
+    await this.rbac.requirePermission(actor, "user.deactivate");
+    const user = await this.repo.terminate(id, actor, reason);
+    await this.audit.record({
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      action: "user.terminated",
+      entityType: "user",
+      entityId: id,
+      metadata: { reason: reason ?? null },
+    });
+    return user;
+  }
   async softDelete(actor: ActorContext, id: string) {
     await this.rbac.requirePermission(actor, "user.delete");
     return this.repo.softDelete(id, actor);

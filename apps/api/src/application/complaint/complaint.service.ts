@@ -102,6 +102,7 @@ export interface ComplaintDetailView {
 export interface OperationalQueueItem {
   complaint: Complaint;
   customerName: string | null;
+  siteName: string | null;
   status: { stepCode: string | null; stepName: string | null; instanceStatus: string } | null;
   sla: { dueAt: Date | null; slaHours: number | null } | null;
   assignment: { roleCode: string | null; userId: string | null; isMine: boolean } | null;
@@ -185,6 +186,10 @@ export class ComplaintService {
     private readonly audit: AuditService,
     private readonly rbac: RbacService,
     private readonly eventBus: EventBus,
+    /** Site names for the operational queue display (owner request).
+     * Optional so existing tests that construct the service directly keep
+     * compiling. */
+    private readonly sites?: { listForTenant(actor: ActorContext): Promise<Array<{ id: string; name: string }>> },
   ) {}
 
   async create(actor: ActorContext, input: CreateComplaintInput): Promise<Complaint> {
@@ -391,6 +396,8 @@ export class ComplaintService {
 
     const customers = await this.customers.listForTenant(actor);
     const nameById = new Map(customers.map((c) => [c.id, c.name]));
+    const sites = await this.sites?.listForTenant(actor) ?? [];
+    const siteNameById = new Map(sites.map((site) => [site.id, site.name]));
 
     const scopedCustomerIds = filters.customerId
       ? customers.filter((customer) => customer.id === filters.customerId).map((customer) => customer.id)
@@ -456,6 +463,8 @@ export class ComplaintService {
     await this.requireInternalActor(actor);
 
     const customers = await this.customers.listForTenant(actor);
+    const sites = await this.sites?.listForTenant(actor) ?? [];
+    const siteNameById = new Map(sites.map((site) => [site.id, site.name]));
     const nameById = new Map(customers.map((c) => [c.id, c.name]));
 
     const scopedCustomerIds = filters.customerId
@@ -488,6 +497,7 @@ export class ComplaintService {
       items.push({
         complaint,
         customerName: nameById.get(complaint.customerId) ?? null,
+        siteName: complaint.siteId ? siteNameById.get(complaint.siteId) ?? null : null,
         status,
         sla,
         assignment,

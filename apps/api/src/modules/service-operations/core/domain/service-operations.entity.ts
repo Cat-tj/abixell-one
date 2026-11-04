@@ -384,6 +384,14 @@ export interface MarkCustomerRejectedInput {
 // ---------------------------------------------------------------------------
 
 export interface ServiceOperationsRepository {
+  // --- Project membership (owner request: project isolation) --------------
+  listProjectMembers(tenantId: string, projectId: string): Promise<{ userId: string; roleCode: string | null; grantedAt: Date }[]>;
+  addProjectMember(tenantId: string, projectId: string, userId: string, roleCode: string | null, grantedBy: string): Promise<void>;
+  removeProjectMember(tenantId: string, projectId: string, userId: string, revokedBy: string): Promise<void>;
+  isProjectMember(tenantId: string, projectId: string, userId: string): Promise<boolean>;
+  listUserProjectIds(tenantId: string, userId: string): Promise<Set<string>>;
+  setWorkOrderProject(workOrderId: string, projectId: string | null, tenantId: string): Promise<void>;
+  listProjectMemberIds(tenantId: string, projectId: string): Promise<Set<string>>;
   /** Tenant of a user — used to reject cross-tenant assignment without
    * pulling in the Identity module's internals. */
   findUserTenantId(userId: string): Promise<string | null>;

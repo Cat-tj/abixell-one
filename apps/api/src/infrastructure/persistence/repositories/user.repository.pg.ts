@@ -394,6 +394,60 @@ export class PgUserRepository implements UserRepository {
     });
   }
 
+  /**
+   * Terminate (owner request): the employee left, the record stays. Sets
+   * status='terminated' (login denied at auth), revokes every live session
+   * and refresh token, and leaves all historical rows untouched — the UI
+   * renders the name struck through with a Terminated badge.
+   */
+  async terminate(
+    id: string,
+    actor: ActorContext,
+    reason: string | null,
+  ): Promise<User> {
+    return inGovernedTransaction(this.pool, actor.tenantId, async (client) => {
+      await requireTransactionActorPermission(client, actor, 'user.deactivate');
+
+      const target = await client.query(
+        `SELECT id, status FROM users
+          WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+          FOR UPDATE`,
+        [id, actor.tenantId],
+      );
+      if (!target.rows[0]) throw new NotFoundError('User', id);
+      if (id === actor.userId) {
+        throw new ConflictError('You cannot terminate your own account');
+      }
+
+      await client.query(
+        `UPDATE users SET status='terminated', deactivated_at=now(), deactivated_by=$2, updated_by=$2, updated_at=now()
+          WHERE id=$1`,
+        [id, actor.userId],
+      );
+      await client.query(
+        `UPDATE sessions SET revoked_at=now(), revoked_reason=$2
+          WHERE user_id=$1 AND revoked_at IS NULL`,
+        [id, reason ?? 'user terminated'],
+      );
+      await client.query(
+        `UPDATE refresh_tokens SET revoked_at=now()
+          WHERE user_id=$1 AND revoked_at IS NULL`,
+        [id],
+      );
+
+      await recordGovernedAudit(client, {
+        tenantId: actor.tenantId,
+        actorUserId: actor.userId,
+        action: 'user.terminated',
+        entityType: 'user',
+        entityId: id,
+        metadata: { reason: reason ?? null, priorStatus: target.rows[0].status },
+      });
+
+      const updated = await client.query(`SELECT * FROM users WHERE id=$1`, [id]);
+      return mapRow(updated.rows[0]);
+    });
+  }
   async softDelete(id: string, actor: ActorContext): Promise<User> {
     return inGovernedTransaction(this.pool, actor.tenantId, async (client) => {
       await requireTransactionActorPermission(client, actor, "user.delete");

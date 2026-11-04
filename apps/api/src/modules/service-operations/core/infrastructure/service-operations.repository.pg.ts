@@ -554,6 +554,63 @@ export class PgServiceOperationsRepository implements ServiceOperationsRepositor
     }
   }
 
+  // --- Project membership (owner request: project isolation) -------------
+
+  async listProjectMembers(tenantId: string, projectId: string): Promise<{ userId: string; roleCode: string | null; grantedAt: Date }[]> {
+    const r = await this.pool.query(
+      `SELECT user_id, role_code, granted_at FROM project_members
+        WHERE tenant_id = $1 AND project_id = $2 AND revoked_at IS NULL ORDER BY granted_at`,
+      [tenantId, projectId],
+    );
+    return r.rows;
+  }
+
+  async addProjectMember(tenantId: string, projectId: string, userId: string, roleCode: string | null, grantedBy: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO project_members (tenant_id, project_id, user_id, role_code, granted_by)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (project_id, user_id) DO UPDATE SET revoked_at=NULL, role_code=EXCLUDED.role_code`,
+      [tenantId, projectId, userId, roleCode, grantedBy],
+    );
+  }
+
+  async removeProjectMember(tenantId: string, projectId: string, userId: string, revokedBy: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE project_members SET revoked_at=now(), revoked_by=$4
+        WHERE tenant_id=$1 AND project_id=$2 AND user_id=$3 AND revoked_at IS NULL`,
+      [tenantId, projectId, userId, revokedBy],
+    );
+  }
+
+  /** All project ids the user is an active member of (for read filtering). */
+  async listUserProjectIds(tenantId: string, userId: string): Promise<Set<string>> {
+    const r = await this.pool.query(
+      `SELECT project_id FROM project_members WHERE tenant_id=$1 AND user_id=$2 AND revoked_at IS NULL`,
+      [tenantId, userId],
+    );
+    return new Set(r.rows.map((row: { project_id: string }) => row.project_id));
+  }
+  async isProjectMember(tenantId: string, projectId: string, userId: string): Promise<boolean> {
+    const r = await this.pool.query(
+      `SELECT 1 FROM project_members WHERE tenant_id=$1 AND project_id=$2 AND user_id=$3 AND revoked_at IS NULL LIMIT 1`,
+      [tenantId, projectId, userId],
+    );
+    return r.rows.length > 0;
+  }
+
+  async setWorkOrderProject(workOrderId: string, projectId: string | null, tenantId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE work_orders SET project_id=$2, updated_at=now() WHERE id=$1 AND tenant_id=$3`,
+      [workOrderId, projectId, tenantId],
+    );
+  }
+
+  async listProjectMemberIds(tenantId: string, projectId: string): Promise<Set<string>> {
+    const r = await this.pool.query(
+      `SELECT user_id FROM project_members WHERE tenant_id=$1 AND project_id=$2 AND revoked_at IS NULL`,
+      [tenantId, projectId],
+    );
+    return new Set(r.rows.map((row: { user_id: string }) => row.user_id));
+  }
   async findOpenAccountingPeriodIdForToday(tenantId: string, legalEntityId: string): Promise<string | null> {
     const r = await this.pool.query(
       `SELECT id

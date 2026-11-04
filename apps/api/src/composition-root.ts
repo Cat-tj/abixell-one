@@ -287,6 +287,7 @@ export function buildContainer() {
     audit,
     rbac,
     eventBus,
+    site,
   );
 
   // Checkpoint 1C.5 — Management Dashboard read-model (aggregate-only,
@@ -914,6 +915,28 @@ export function buildContainer() {
     },
     { timersDisabled: process.env.SCHEDULER_DISABLED === "true" },
   );
+  // Daily backup job: run the same production backup script from a child
+  // process. Enabled per-deployment by flipping the job on in Settings →
+  // Backup once BACKUP_ROOT/FILE_STORAGE_ROOT are provisioned on the host.
+  const backupScriptPath = process.env.BACKUP_SCRIPT_PATH ?? "";
+  const backupRunner = async () => {
+    if (!backupScriptPath) {
+      throw new Error("daily-backup: BACKUP_SCRIPT_PATH is not configured for this deployment");
+    }
+    const started = Date.now();
+    const child = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execFile = promisify(child.execFile);
+    const { stdout } = await execFile(process.execPath, [backupScriptPath], {
+      env: process.env,
+      timeout: 30 * 60 * 1000,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    const durationMs = Date.now() - started;
+    const match = stdout.match(/Backup completed: (.+)$/m);
+    return { backupId: match?.[1]?.split(/[\/]/).pop() ?? `backup-${durationMs}`, durationMs };
+  };
+
   registerJobHandlers(scheduler, {
     tenantRepo,
     workflow,
@@ -921,6 +944,7 @@ export function buildContainer() {
     serviceQuality,
     accountingEventConsumer,
     survey,
+    backupRunner,
   });
 
   return {

@@ -3993,6 +3993,46 @@ export class PgRbacRepository implements RbacRepository {
     return new Set(result.rows.map((r) => r.code));
   }
 
+  /**
+   * Included-role closure (AD_Role_Included parity): all role ids a role
+   * inherits from, depth-limited to guard against cycles. Own id first,
+   * then every included role transitively.
+   */
+  async resolveIncludedRoleIds(tenantId: string, roleId: string): Promise<string[]> {
+    const seen = new Set<string>([roleId]);
+    let frontier = [roleId];
+    for (let depth = 0; depth < 8 && frontier.length > 0; depth++) {
+      const r = await this.pool.query(
+        `SELECT included_role_id FROM role_included
+          WHERE tenant_id = $1 AND parent_role_id = ANY($2::uuid[])`,
+        [tenantId, frontier],
+      );
+      frontier = r.rows
+        .map((row: { included_role_id: string }) => row.included_role_id)
+        .filter((id: string) => !seen.has(id));
+      for (const id of frontier) seen.add(id);
+    }
+    return [...seen];
+  }
+
+  /** Window access for a role including its included roles (union). */
+  async getWindowAccessForRole(tenantId: string, roleId: string): Promise<{ windowCode: string; isReadWrite: boolean; accessTypes: string[] }[]> {
+    const roleIds = await this.resolveIncludedRoleIds(tenantId, roleId);
+    const r = await this.pool.query(
+      `SELECT wa.window_code, wa.is_read_write,
+              COALESCE(array_agg(wat.access_type) FILTER (WHERE wat.access_type IS NOT NULL), '{}') AS access_types
+         FROM window_access wa
+         LEFT JOIN window_access_types wat ON wat.window_access_id = wa.id
+        WHERE wa.tenant_id = $1 AND wa.role_id = ANY($2::uuid[]) AND wa.revoked_at IS NULL
+        GROUP BY wa.window_code, wa.is_read_write`,
+      [tenantId, roleIds],
+    );
+    return r.rows.map((row: { window_code: string; is_read_write: boolean; access_types: string[] }) => ({
+      windowCode: row.window_code,
+      isReadWrite: row.is_read_write,
+      accessTypes: row.access_types ?? [],
+    }));
+  }
   async getEffectivePermissionCodesForAssignment(
     tenantId: string,
     assignmentId: string | null,

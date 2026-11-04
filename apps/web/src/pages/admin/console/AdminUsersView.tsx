@@ -12,6 +12,7 @@
  * Service Operation decision closes.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { UserX } from "lucide-react";
 import { useAuth } from "../../../auth/AuthContext";
 import { useT } from "../../../i18n/LocaleProvider";
 import {
@@ -105,6 +106,7 @@ export function AdminUsersView({
   canManageAccess: boolean;
 }) {
   const t = useT();
+  const { session } = useAuth();
   const { data, loading, error, denied, sessionExpired, reload } =
     useAdminResource<AdminUserAccessSummary[]>(
       (token) => api.adminUsers(token),
@@ -116,6 +118,24 @@ export function AdminUsersView({
   const [detailUser, setDetailUser] = useState<AdminUserAccessSummary | null>(null);
   const [assignTarget, setAssignTarget] = useState<AdminUserAccessSummary | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [terminatingId, setTerminatingId] = useState<string | null>(null);
+
+  const terminateUser = useCallback(
+    async (user: AdminUserAccessSummary, triggerEl: HTMLElement) => {
+      if (!window.confirm(t("adminUsers.terminateConfirm", { name: user.fullName }))) return;
+      setTerminatingId(user.id);
+      try {
+        await api.terminateUser(session!.accessToken, user.id, null);
+        setFeedback(t("adminUsers.terminated", { name: user.fullName }));
+        reload();
+      } catch {
+        setFeedback(t("adminUsers.terminateFailed"));
+      } finally {
+        setTerminatingId(null);
+      }
+    },
+    [reload, t, session],
+  );
   const detailTriggerRef = useRef<HTMLButtonElement | null>(null);
   const assignTriggerRef = useRef<HTMLButtonElement | null>(null);
   const createTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -248,7 +268,15 @@ export function AdminUsersView({
                 mobileRole: "title",
                 cell: (user) => (
                   <div>
-                    <div className="font-medium text-ink">{user.fullName}</div>
+                    <div
+                      className={
+                        user.status === "terminated"
+                          ? "font-medium text-ink-dim line-through decoration-danger decoration-2"
+                          : "font-medium text-ink"
+                      }
+                    >
+                      {user.fullName}
+                    </div>
                     <div className="break-all text-xs text-ink-dim">{user.email}</div>
                   </div>
                 ),
@@ -257,7 +285,15 @@ export function AdminUsersView({
                 header: t("adminUsers.columnStatus"),
                 mobileRole: "status",
                 cell: (user) => (
-                  <StatusPill tone={user.status === "active" ? "success" : "neutral"}>
+                  <StatusPill
+                    tone={
+                      user.status === "active"
+                        ? "success"
+                        : user.status === "terminated"
+                          ? "danger"
+                          : "neutral"
+                    }
+                  >
                     {user.status}
                   </StatusPill>
                 ),
@@ -312,6 +348,17 @@ export function AdminUsersView({
                         onClick={(event) => openAssign(user, event.currentTarget)}
                       >
                         {t("adminUsers.assignAccess")}
+                      </Button>
+                    )}
+                    {canManageAccess && user.status === "active" && (
+                      <Button
+                        variant="ghost"
+                        className="min-h-[44px] text-status-danger"
+                        aria-label={t("adminUsers.terminate")}
+                        title={t("adminUsers.terminate")}
+                        onClick={(event) => void terminateUser(user, event.currentTarget)}
+                      >
+                        <UserX size={16} aria-hidden="true" />
                       </Button>
                     )}
                   </div>

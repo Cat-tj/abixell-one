@@ -12,5 +12,9 @@ export default defineConfig({
     // suite passes in isolation; this only stops the shared-database race from
     // deciding the result.
     hookTimeout: 30_000,
+    // Same shared-database contention applies to individual tests that
+    // bootstrap tenants mid-suite (default 5s). 15s covers a contended
+    // database without hiding real hangs.
+    testTimeout: 15_000,
   },
 });

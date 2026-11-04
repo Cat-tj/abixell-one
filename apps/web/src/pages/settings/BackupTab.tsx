@@ -4,6 +4,7 @@
  * Gated by `config.system.*` (or the legacy `config.manage`).
  */
 import { useCallback, useEffect, useState } from "react";
+import { History, Play } from "lucide-react";
 import { api, type ScheduledJob, type ScheduledJobRun } from "../../lib/api";
 import { useT } from "../../i18n/LocaleProvider";
 import {
@@ -113,16 +114,25 @@ export function BackupTab({
     {
       header: t("backup.actions"),
       cell: (job) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
-            variant="secondary"
+            variant="ghost"
+            aria-label={triggering === job.jobCode ? t("backup.triggering") : t("backup.trigger")}
+            title={triggering === job.jobCode ? t("backup.triggering") : t("backup.trigger")}
             disabled={!canManage || triggering === job.jobCode}
             onClick={() => trigger(job.jobCode)}
+            className="min-h-0 px-2 py-1"
           >
-            {triggering === job.jobCode ? t("backup.triggering") : t("backup.trigger")}
+            <Play size={16} aria-hidden="true" />
           </Button>
-          <Button variant="ghost" onClick={() => loadRuns(job.jobCode)}>
-            {t("backup.history")}
+          <Button
+            variant="ghost"
+            aria-label={t("backup.history")}
+            title={t("backup.history")}
+            onClick={() => loadRuns(job.jobCode)}
+            className="min-h-0 px-2 py-1"
+          >
+            <History size={16} aria-hidden="true" />
           </Button>
         </div>
       ),
@@ -138,6 +148,20 @@ export function BackupTab({
           keyOf={(job) => job.jobCode}
           empty={<EmptyState title={t("backup.emptyTitle")} description={t("backup.emptyDesc")} />}
         />
+      </Card>
+
+      {/* Offsite copy guidance (owner request: backup harian + rclone).
+          The scheduler job produces the checksummed set under BACKUP_ROOT;
+          the rclone push stays on the host so cloud credentials never enter
+          the API container. */} 
+      <Card>
+        <h3 className="mb-1 text-sm font-semibold text-ink">
+          {t("backup.offsite.title")}
+        </h3>
+        <p className="text-sm text-ink-dim">{t("backup.offsite.desc")}</p>
+        <pre className="mt-2 overflow-x-auto rounded bg-panel-2 p-3 text-xs text-ink-dim" style={{ fontFamily: "var(--font-code)" }}>
+{t("backup.offsite.command")}
+        </pre>
       </Card>
 
       {Object.entries(runs).map(([jobCode, jobRuns]) =>

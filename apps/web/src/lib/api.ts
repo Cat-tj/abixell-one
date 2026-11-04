@@ -375,6 +375,13 @@ export const api = {
       }>
     >("/users", { token }),
 
+  terminateUser: (token: string, id: string, reason: string | null) =>
+    request<{ id: string; status: string }>(`/users/${id}/terminate`, {
+      method: "POST",
+      token,
+      body: { reason },
+    }),
+
   createCustomerUser: (
     token: string,
     payload: {
@@ -6793,6 +6800,7 @@ export type OperationalQueueFilters = {
 export type OperationalQueueItem = {
   complaint: Complaint;
   customerName: string | null;
+  siteName: string | null;
   status: ComplaintDetailStatus;
   sla: ComplaintSla;
   assignment: ComplaintAssignmentSummary;

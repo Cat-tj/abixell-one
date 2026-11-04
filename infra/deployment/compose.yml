@@ -122,6 +122,11 @@ services:
       FILE_STORAGE_ROOT: /data/documents
       APPLICATION_RELEASE: ${APPLICATION_RELEASE:?Set APPLICATION_RELEASE}
       SCHEDULER_DISABLED: ${SCHEDULER_DISABLED:-false}
+      # Daily-backup scheduler job: absolute path to the backup script inside
+      # the API image. The job fails fast with a clear error (visible in
+      # Settings → Backup) rather than skipping silently when unset.
+      BACKUP_SCRIPT_PATH: ${BACKUP_SCRIPT_PATH:-/app/scripts/backup-postgres.mjs}
+      BACKUP_ROOT: ${BACKUP_ROOT:?Set protected BACKUP_ROOT}
       INTEGRATION_OUTBOX_BATCH_SIZE: ${INTEGRATION_OUTBOX_BATCH_SIZE:-100}
       INTEGRATION_OUTBOX_MAX_ATTEMPTS: ${INTEGRATION_OUTBOX_MAX_ATTEMPTS:-5}
       INTEGRATION_OUTBOX_RETRY_BASE_SECONDS: ${INTEGRATION_OUTBOX_RETRY_BASE_SECONDS:-30}

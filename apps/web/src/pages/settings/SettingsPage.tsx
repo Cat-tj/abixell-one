@@ -13,6 +13,18 @@
  * every endpoint enforces its own permission.
  */
 import { useEffect, useMemo, useState } from "react";
+import {
+  Boxes,
+  Building2,
+  DatabaseBackup,
+  FileText,
+  LayoutDashboard,
+  Layers,
+  Palette,
+  ShieldCheck,
+  Users,
+  Workflow,
+} from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { api } from "../../lib/api";
@@ -47,6 +59,7 @@ type TabKey =
 
 interface Tab {
   key: TabKey;
+  icon: typeof LayoutDashboard;
   labelKey: MessageKey;
   descriptionKey: MessageKey;
   /** Any-of read gate for showing the tab. */
@@ -54,16 +67,16 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { key: "overview", labelKey: "settings.tabOverview", descriptionKey: "settings.tabOverviewDesc", readAnyOf: [PERMISSIONS.adminConsoleRead] },
-  { key: "access", labelKey: "settings.tabAccess", descriptionKey: "settings.tabAccessDesc", readAnyOf: [PERMISSIONS.configUserRead, PERMISSIONS.configUserManage, "user.role.manage", PERMISSIONS.configManage] },
-  { key: "modules", labelKey: "settings.tabModules", descriptionKey: "settings.tabModulesDesc", readAnyOf: [PERMISSIONS.configModuleRead, PERMISSIONS.configModuleManage, PERMISSIONS.configManage] },
-  { key: "platform", labelKey: "settings.tabPlatform", descriptionKey: "settings.tabPlatformDesc", readAnyOf: [PERMISSIONS.configPlatformRead, PERMISSIONS.configPlatformManage, PERMISSIONS.configManage] },
-  { key: "organization", labelKey: "settings.tabOrganization", descriptionKey: "settings.tabOrganizationDesc", readAnyOf: [PERMISSIONS.configOrgRead, PERMISSIONS.configOrgManage, PERMISSIONS.configManage] },
-  { key: "workflows", labelKey: "settings.tabWorkflows", descriptionKey: "settings.tabWorkflowsDesc", readAnyOf: [PERMISSIONS.configWorkflowRead, PERMISSIONS.configWorkflowManage, PERMISSIONS.configManage] },
-  { key: "services", labelKey: "settings.tabServices", descriptionKey: "settings.tabServicesDesc", readAnyOf: [PERMISSIONS.configNotificationRead, PERMISSIONS.configNotificationManage, PERMISSIONS.configDocumentRead, PERMISSIONS.configDocumentManage, PERMISSIONS.configManage] },
-  { key: "backup", labelKey: "settings.tabBackup", descriptionKey: "settings.tabBackupDesc", readAnyOf: [PERMISSIONS.configSystemRead, PERMISSIONS.configSystemManage, PERMISSIONS.configManage] },
-  { key: "appearance", labelKey: "settings.tabAppearance", descriptionKey: "settings.tabAppearanceDesc", readAnyOf: [PERMISSIONS.configPlatformRead, PERMISSIONS.configPlatformManage, PERMISSIONS.configManage] },
-  { key: "documents", labelKey: "settings.tabDocuments", descriptionKey: "settings.tabDocumentsDesc", readAnyOf: [PERMISSIONS.configDocumentRead, PERMISSIONS.configDocumentManage, PERMISSIONS.configManage] },
+  { key: "overview", icon: LayoutDashboard, labelKey: "settings.tabOverview", descriptionKey: "settings.tabOverviewDesc", readAnyOf: [PERMISSIONS.adminConsoleRead] },
+  { key: "access", icon: Users, labelKey: "settings.tabAccess", descriptionKey: "settings.tabAccessDesc", readAnyOf: [PERMISSIONS.configUserRead, PERMISSIONS.configUserManage, "user.role.manage", PERMISSIONS.configManage] },
+  { key: "modules", icon: Boxes, labelKey: "settings.tabModules", descriptionKey: "settings.tabModulesDesc", readAnyOf: [PERMISSIONS.configModuleRead, PERMISSIONS.configModuleManage, PERMISSIONS.configManage] },
+  { key: "platform", icon: ShieldCheck, labelKey: "settings.tabPlatform", descriptionKey: "settings.tabPlatformDesc", readAnyOf: [PERMISSIONS.configPlatformRead, PERMISSIONS.configPlatformManage, PERMISSIONS.configManage] },
+  { key: "organization", icon: Building2, labelKey: "settings.tabOrganization", descriptionKey: "settings.tabOrganizationDesc", readAnyOf: [PERMISSIONS.configOrgRead, PERMISSIONS.configOrgManage, PERMISSIONS.configManage] },
+  { key: "workflows", icon: Workflow, labelKey: "settings.tabWorkflows", descriptionKey: "settings.tabWorkflowsDesc", readAnyOf: [PERMISSIONS.configWorkflowRead, PERMISSIONS.configWorkflowManage, PERMISSIONS.configManage] },
+  { key: "services", icon: Layers, labelKey: "settings.tabServices", descriptionKey: "settings.tabServicesDesc", readAnyOf: [PERMISSIONS.configNotificationRead, PERMISSIONS.configNotificationManage, PERMISSIONS.configDocumentRead, PERMISSIONS.configDocumentManage, PERMISSIONS.configManage] },
+  { key: "backup", icon: DatabaseBackup, labelKey: "settings.tabBackup", descriptionKey: "settings.tabBackupDesc", readAnyOf: [PERMISSIONS.configSystemRead, PERMISSIONS.configSystemManage, PERMISSIONS.configManage] },
+  { key: "appearance", icon: Palette, labelKey: "settings.tabAppearance", descriptionKey: "settings.tabAppearanceDesc", readAnyOf: [PERMISSIONS.configPlatformRead, PERMISSIONS.configPlatformManage, PERMISSIONS.configManage] },
+  { key: "documents", icon: FileText, labelKey: "settings.tabDocuments", descriptionKey: "settings.tabDocumentsDesc", readAnyOf: [PERMISSIONS.configDocumentRead, PERMISSIONS.configDocumentManage, PERMISSIONS.configManage] },
 ];
 
 function isTabKey(value: string | null): value is TabKey {
@@ -183,13 +196,14 @@ export function SettingsPage() {
               type="button"
               onClick={() => selectTab(item.key)}
               aria-current={tab.key === item.key ? "page" : undefined}
-              className={`-mb-px inline-flex min-h-[44px] items-center rounded-t px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:min-h-[36px] ${
+              className={`-mb-px inline-flex min-h-[44px] items-center gap-2 rounded-t px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:min-h-[36px] ${
                 tab.key === item.key
                   ? "border-b-2 border-accent text-ink"
                   : "border-b-2 border-transparent text-ink-dim hover:text-ink"
               }`}
             >
-              {t(item.labelKey)}
+              <item.icon size={16} aria-hidden="true" className="shrink-0" />
+              <span>{t(item.labelKey)}</span>
             </button>
           ))}
         </div>

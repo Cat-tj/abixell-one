@@ -74,6 +74,13 @@ export class PgSiteRepository implements SiteRepository {
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   }
 
+  async listForTenant(tenantId: string): Promise<Site[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM sites WHERE tenant_id = $1 ORDER BY name`,
+      [tenantId],
+    );
+    return result.rows.map(mapRow);
+  }
   async listByCustomer(customerId: string): Promise<Site[]> {
     const result = await this.pool.query(
       `SELECT * FROM sites WHERE customer_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC`,

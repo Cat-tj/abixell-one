@@ -63,6 +63,11 @@ export class SiteService {
     return site;
   }
 
+  /** All tenant sites — complaint queue display (owner request). */
+  async listForTenant(actor: ActorContext): Promise<Site[]> {
+    await this.rbac.requirePermission(actor, "customer.read");
+    return this.repo.listForTenant(actor.tenantId);
+  }
   async listByCustomer(actor: ActorContext, customerId: string): Promise<Site[]> {
     await this.rbac.requirePermission(actor, "site.read");
     await this.customers.getAuthorized(actor, customerId);

@@ -172,6 +172,25 @@ export function registerServiceOperationsRoutes(app: FastifyInstance, container:
 
   // --- Work Orders (SO-CORE-003 … SO-CORE-014) -------------------------
 
+  // --- Project membership (owner request: project isolation) -------------
+
+  app.get("/projects/:id/members", { preHandler: app.authenticate }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return reply.send(await svc().listProjectMembers(request.actor!, id));
+  });
+
+  app.post("/projects/:id/members", { preHandler: app.authenticate }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ userId: z.string().uuid(), roleCode: z.string().nullable().optional() }).parse(request.body);
+    await svc().addProjectMember(request.actor!, id, body.userId, body.roleCode ?? null);
+    return reply.status(201).send({ ok: true });
+  });
+
+  app.delete("/projects/:id/members/:userId", { preHandler: app.authenticate }, async (request, reply) => {
+    const { id, userId } = z.object({ id: z.string().uuid(), userId: z.string().uuid() }).parse(request.params);
+    await svc().removeProjectMember(request.actor!, id, userId);
+    return reply.status(204).send();
+  });
   app.post("/work-orders", { preHandler: app.authenticate }, async (request, reply) => {
     const body = workOrderSchema.parse(request.body);
     return reply.status(201).send(await svc().createWorkOrder(request.actor!, body));
