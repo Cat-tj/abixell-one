@@ -146,6 +146,7 @@ export function registerAuthRoutes(app: FastifyInstance, container: Container) {
       ? await container.rbac.getPermissionsForRole(actor.tenantId, picked.roleCode)
       : new Set<string>();
     const activeAssignmentName = picked?.roleName ?? null;
+    const activeRoleCode = picked?.roleCode ?? null;
     const activeScopeName =
       picked?.scopeType === "tenant"
         ? picked.scopeType
@@ -193,6 +194,7 @@ export function registerAuthRoutes(app: FastifyInstance, container: Container) {
       assignments: myAssignments,
       activeAssignmentId: actor.assignmentId,
       activeAssignmentName,
+      activeRoleCode,
       activeScopeName,
     });
   });

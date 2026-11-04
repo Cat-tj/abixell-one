@@ -243,6 +243,8 @@ export const api = {
       /** Display name of the ACTIVE Role (Epic 1 §4.1: the session's
        * active assignment, not a client-side choice). */
       activeAssignmentName: string | null;
+      /** Code of the ACTIVE Role — drives the role-aware dashboard. */
+      activeRoleCode: string | null;
       /** Display name of the ACTIVE assignment's scope, for the user
        * menu. Null when the session has no active Role. */
       activeScopeName: string | null;
@@ -319,6 +321,11 @@ export const api = {
       contactAdminPhone?: string | null;
     },
   ) => request<{ name: string }>("/tenants/me", { method: "PATCH", token, body: payload }),
+
+  myDashboard: (token: string) =>
+    request<{ blocks: Record<string, Record<string, number | object>> }>("/my/dashboard", {
+      token,
+    }),
 
   organizationUnits: (token: string) =>
     request<
@@ -6546,6 +6553,9 @@ export type NotificationTemplate = {
 export type Notification = {
   id: string;
   eventType: string;
+  /** Business object the event was about — drives the "open task" link. */
+  entityType?: string | null;
+  entityId?: string | null;
   channel: string;
   subject: string | null;
   body: string;

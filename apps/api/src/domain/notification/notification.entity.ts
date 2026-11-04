@@ -28,6 +28,11 @@ export interface Notification {
   tenantId: string;
   domainEventId: string | null;
   eventType: string;
+  /** The business object the event was about (from domain_events) — lets the
+   * UI link the notification to the task it refers to. Null for legacy rows
+   * or events without an entity. */
+  entityType?: string | null;
+  entityId?: string | null;
   channel: NotificationChannel;
   recipientUserId: string | null;
   subject: string | null;

@@ -930,7 +930,7 @@ export function buildContainer() {
     approvalAuthority,
     eventBus,
     scheduler,
-    tenant: new TenantService(tenantRepo, audit, rbac),
+    tenant: new TenantService(tenantRepo, audit, rbac, rbacRepo),
     legalEntity: new LegalEntityService(legalEntityRepo, rbac),
     legalEntityAttachmentReference: new LegalEntityAttachmentReferenceService(
       new PgLegalEntityAttachmentReferenceRepository(pool),

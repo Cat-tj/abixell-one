@@ -78,9 +78,9 @@ export const en = {
   "overview.welcomeFallback": "your workspace",
   "overview.subtitle":
     "Choose an area to continue. You only see the sections your access allows.",
-  "overview.emptyTitle": "No work areas available",
+  "overview.emptyTitle": "Your account is ready — menus to follow",
   "overview.emptyDescription":
-    "You are signed in, but no destination is currently available to your account. Contact your administrator if you expect additional access.",
+    "For now your account focuses on tasks sent directly to you (e.g. via notifications). If you expected more menus, contact your administrator.",
   "overview.lockedFallback": "You do not have access to this area.",
 
   // -------------------------------------------------------------- Profile
@@ -1119,6 +1119,8 @@ export const en = {
   "sharedServices.colChannel": "Channel",
   "sharedServices.colCreated": "Created",
   "sharedServices.colAction": "Action",
+  "sharedServices.colOpen": "Open",
+  "sharedServices.openTask": "Open task",
   "sharedServices.colActions": "Actions",
   "sharedServices.colUploaded": "Uploaded",
   "sharedServices.colStatus": "Status",

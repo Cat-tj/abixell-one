@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   ApiError,
@@ -419,6 +420,24 @@ export function SharedServicesPanel({
     loadResource("jobRuns", setJobRuns, () => api.scheduledJobRuns(token, job.jobCode), t("sharedServices.jobRunsLoad"));
   }
 
+  // Map a notification's event entity to the page that shows it. Unknown
+  // entity types render no link rather than a broken one.
+  const notificationLink = (item: Notification) => {
+    if (!item.entityType || !item.entityId) return "—";
+    const route =
+      item.entityType === "complaint"
+        ? `/complaints/${item.entityId}`
+        : item.entityType === "work_order"
+          ? `/work-orders`
+          : undefined;
+    if (!route) return "—";
+    return (
+      <Link to={route} className="text-sm font-medium text-accent underline-offset-2 hover:underline">
+        {t("sharedServices.openTask")}
+      </Link>
+    );
+  };
+
   const notificationColumns: Column<Notification>[] = [
     { header: t("sharedServices.colNotification"), mobileRole: "title", cell: (item) => item.subject ?? item.eventType },
     { header: t("sharedServices.colBody"), mobileRole: "detail", cell: (item) => item.body },
@@ -429,6 +448,10 @@ export function SharedServicesPanel({
       cell: (item) => <StatusPill tone={item.readAt ? "neutral" : "info"}>{item.readAt ? t("sharedServices.read") : t("sharedServices.unread")}</StatusPill>,
     },
     { header: t("sharedServices.colCreated"), cell: (item) => new Date(item.createdAt).toLocaleString() },
+    {
+      header: t("sharedServices.colOpen"),
+      cell: (item) => notificationLink(item),
+    },
     {
       header: t("sharedServices.colAction"),
       cell: (item) =>

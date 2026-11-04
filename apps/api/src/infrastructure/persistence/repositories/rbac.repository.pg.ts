@@ -3290,6 +3290,24 @@ export class PgRbacRepository implements RbacRepository {
     return new Set(result.rows.map((r: { code: string }) => r.code));
   }
 
+  /**
+   * Turn on every module for a freshly provisioned Tenant. See
+   * TenantService.create: the module-activity write gate leaves a
+   * zero-activation tenant unable to accept any write at all, which made
+   * every new deployment land dead on arrival. Activation remains
+   * reversible per module afterwards.
+   */
+  async activateAllModulesForTenant(tenantId: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO tenant_module_activations (tenant_id, module_id, is_active, updated_by)
+       SELECT $1, m.id, true, NULL
+         FROM modules m
+        WHERE m.code <> 'platform'
+       ON CONFLICT (tenant_id, module_id) DO UPDATE SET is_active = true, updated_at = now()`,
+      [tenantId],
+    );
+  }
+
   private async registeredProcessCodes(
     client: PoolClient,
     tenantId: string,

@@ -28,6 +28,7 @@ import { registerConfigurationRoutes } from "./interfaces/http/routes/config.js"
 import { registerAppMetadataRoutes } from "./interfaces/http/routes/app-metadata.js";
 import { registerWorkflowRoutes } from "./interfaces/http/routes/workflow.js";
 import { registerNotificationRoutes } from "./interfaces/http/routes/notifications.js";
+import { registerMyDashboardRoutes } from "./interfaces/http/routes/my-dashboard.js";
 import { registerDocumentRoutes } from "./interfaces/http/routes/documents.js";
 import { registerSchedulerRoutes } from "./interfaces/http/routes/scheduler.js";
 import { registerIntegrationRoutes } from "./interfaces/http/routes/integration.js";
@@ -200,6 +201,7 @@ export function buildApp(): FastifyInstance {
     registerAppMetadataRoutes(scoped, container);
     registerWorkflowRoutes(scoped, container);
     registerNotificationRoutes(scoped, container);
+    registerMyDashboardRoutes(scoped, container);
     registerDocumentRoutes(scoped, container);
     registerSchedulerRoutes(scoped, container);
     registerIntegrationRoutes(scoped, container);

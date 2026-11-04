@@ -69,6 +69,16 @@ describe("Checkpoint 0C — Configuration & Metadata Foundation", () => {
   });
 
   it("lists the Product Core Module catalog with none activated for a fresh Tenant", async () => {
+    // Tenant creation now activates every module by default (the
+    // fresh-deployment fix). This test verifies the module CATALOG and the
+    // read-only refusal path, so it starts from the all-inactive state it
+    // has always assumed.
+    for (const m of (await app.inject({ method: "GET", url: "/config/modules", headers: authHeader(adminToken) })).json()) {
+      if (m.isActive) {
+        const off = await app.inject({ method: "PUT", url: `/config/modules/${m.moduleCode}`, headers: authHeader(adminToken), payload: { isActive: false } });
+        if (off.statusCode !== 200) throw new Error(`deactivate ${m.moduleCode} failed`);
+      }
+    }
     const response = await app.inject({
       method: "GET",
       url: "/config/modules",
@@ -298,7 +308,12 @@ describe("Checkpoint 0C — Configuration & Metadata Foundation", () => {
        WHERE tma.tenant_id = $1 AND m.code = 'survey_assessment'`,
       [tenantId],
     );
-    expect(row.rows).toHaveLength(0); // nothing was written despite the attempt
+    // The refused write must leave the module in its prior state. With
+    // activate-on-create the row always exists; this test deactivated the
+    // catalog earlier, so the prior state is 'false' — the assertion is
+    // that the 403 did not flip it.
+    expect(row.rows).toHaveLength(1);
+    expect(row.rows[0].is_active).toBe(false);
   });
 
   it("allows the granular config.module.manage alone to toggle a Module (Epic 15 Decision #7)", async () => {
@@ -370,6 +385,13 @@ describe("Checkpoint 0C — Configuration & Metadata Foundation", () => {
       const otherAdmin = await login(app, `${TENANT_CODE}-other`, "other@test-0c.local", "OtherAdminPass123!");
       expect(otherAdmin.statusCode).toBe(200);
       const otherHeaders = authHeader(otherAdmin.body.accessToken);
+      // All modules are active on a fresh tenant now; reduce to exactly
+      // survey_assessment for this assertion.
+      for (const m of (await app.inject({ method: "GET", url: "/config/modules", headers: otherHeaders })).json()) {
+        if (m.isActive && m.moduleCode !== "survey_assessment") {
+          await app.inject({ method: "PUT", url: `/config/modules/${m.moduleCode}`, headers: otherHeaders, payload: { isActive: false } });
+        }
+      }
       const activated = await app.inject({
         method: "PUT", url: "/config/modules/survey_assessment",
         headers: otherHeaders,

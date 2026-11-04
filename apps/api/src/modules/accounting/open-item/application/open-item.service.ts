@@ -120,6 +120,33 @@ export class OpenItemService {
     return allocation;
   }
 
+  /**
+   * AR settlement for a Customer Invoice (Tahap B8): flips the invoice's
+   * ar_status to 'settled' once its open item is fully allocated. The check
+   * reads the same allocation ledger allocate() writes, so a partially
+   * allocated invoice stays 'open' and an over-settle is impossible.
+   */
+  async settleInvoice(
+    actor: ActorContext,
+    invoiceId: string,
+  ): Promise<{ invoiceId: string; arStatus: string }> {
+    await this.rbac.requirePermission(actor, "finance.accounting.approve");
+    const result = await this.repo.settleInvoice({
+      tenantId: actor.tenantId,
+      invoiceId,
+      actorUserId: actor.userId,
+    });
+    await this.audit.record({
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      action: "accounting.invoice.settled",
+      entityType: "customer_invoice",
+      entityId: invoiceId,
+      metadata: {},
+    });
+    return result;
+  }
+
   async reverseAllocation(
     actor: ActorContext,
     allocationId: string,

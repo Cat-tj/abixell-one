@@ -29,7 +29,7 @@ import { useT } from "../../i18n/LocaleProvider";
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-on hover:bg-accent-line disabled:opacity-50",
+  primary: "bg-accent text-accent-on font-semibold hover:bg-accent-line shadow-[0_6px_14px_-6px_rgba(124,92,232,0.7)] disabled:opacity-50",
   secondary:
     "border border-line-strong bg-panel text-ink-dim hover:bg-panel-3 hover:text-ink disabled:opacity-50",
   ghost: "text-ink-dim hover:bg-panel-2 hover:text-ink disabled:opacity-50",
@@ -42,7 +42,7 @@ export const Button = forwardRef<
   return (
     <button
       ref={ref}
-      className={`inline-flex min-h-[44px] items-center justify-center rounded px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-ground sm:min-h-[36px] ${BUTTON_VARIANTS[variant]} ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-ground sm:min-h-[36px] ${BUTTON_VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {children}

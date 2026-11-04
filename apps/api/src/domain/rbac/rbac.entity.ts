@@ -408,6 +408,8 @@ export interface RbacRepository extends RoleDefinitionRepository {
    * caller's own post-login context picker. */
   getMyAssignmentsWithScopeNames(userId: string): Promise<MyRoleAssignment[]>;
   findRoleByCode(tenantId: string, code: string): Promise<Role | null>;
+  /** Provisioning read/write: activate every module for a fresh Tenant. */
+  activateAllModulesForTenant(tenantId: string): Promise<void>;
   /** `tenantId` is required because this writer serializes on the tenant row:
    * `user_role_assignments.role_id` is ON DELETE CASCADE, so an assignment
    * inserted outside that lock can be silently cascaded away by a concurrent

@@ -17,6 +17,7 @@
  * denied it would be the worse version of the same information.
  */
 import { Link } from "react-router-dom";
+import { RoleDashboard } from "./RoleDashboard";
 import { useShell } from "../shell/layout/AppShell";
 import { servedGroupPages } from "../lib/servedNav";
 import { EmptyState, PageHeader } from "../shell/components/ui";
@@ -38,6 +39,9 @@ export function OverviewPage() {
 
   return (
     <div>
+      {/* Role-aware landing: roles with a tailored layout get their own
+          dashboard instead of the generic area list. */}
+      <RoleDashboard />
       <PageHeader
         title={t("overview.welcome", { tenant: tenantName || t("overview.welcomeFallback") })}
         subtitle={t("overview.subtitle")}

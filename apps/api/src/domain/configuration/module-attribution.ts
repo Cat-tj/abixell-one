@@ -249,6 +249,7 @@ export const API_SEGMENT_MODULES: Readonly<Record<string, ModuleCode>> = {
   integration: "platform",
   "legal-entities": "platform",
   me: "platform",
+  my: "platform",
   notifications: "platform",
   observability: "platform",
   "organization-units": "platform",

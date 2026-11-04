@@ -63,6 +63,7 @@ interface ShellContextValue {
    */
   navGroups: ServedNavGroup[];
   userId: string;
+  activeRoleCode: string | null;
   tenantName: string;
   setTenantName: (name: string) => void;
 }
@@ -427,6 +428,7 @@ export function AppShell() {
   const navigate = useNavigate();
 
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [activeRoleCode, setActiveRoleCode] = useState<string | null>(null);
   const [scopeTypes, setScopeTypes] = useState<string[]>([]);
   const [activeModuleCodes, setActiveModuleCodes] = useState<string[]>([]);
   // The navigation the server sent for THIS caller (§4.3 step 7). Held as the
@@ -542,6 +544,7 @@ export function AppShell() {
       const me = await api.me(token);
       if (loadGeneration.current !== generation) return;
       setPermissions(me.permissions);
+      setActiveRoleCode(me.activeRoleCode);
       setScopeTypes(me.scopeTypes);
       setActiveModuleCodes(me.activeModuleCodes ?? []);
       setMenu(me.menu ?? []);
@@ -555,15 +558,19 @@ export function AppShell() {
         activeScopeName: me.activeScopeName ?? undefined,
       });
       // The Tenant name is only the workspace title, and reading it needs
-      // `tenant.read` — a permission a Customer User does NOT hold. Fetch it
-      // best-effort so its absence never blocks the shell; fall back to the
-      // neutral title (ADR-0003) instead.
-      try {
-        const tenant = await api.tenant(token);
-        if (loadGeneration.current !== generation) return;
-        setTenantName(tenant.name);
-      } catch {
-        if (loadGeneration.current !== generation) return;
+      // `tenant.read` — a permission a Customer User does NOT hold. Gate the
+      // fetch on the permission the server just reported instead of firing a
+      // guaranteed-403 request and falling back (ADR-0003 neutral title).
+      if (me.permissions.includes("tenant.read")) {
+        try {
+          const tenant = await api.tenant(token);
+          if (loadGeneration.current !== generation) return;
+          setTenantName(tenant.name);
+        } catch {
+          if (loadGeneration.current !== generation) return;
+          setTenantName("");
+        }
+      } else {
         setTenantName("");
       }
     } catch (err) {
@@ -909,6 +916,7 @@ export function AppShell() {
                   scopeTypes,
                   activeModuleCodes,
                   navGroups: groups,
+                  activeRoleCode,
                   userId: session!.userId,
                   tenantName,
                   setTenantName,

@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import { ConflictError, NotFoundError } from "../../../../domain/shared-kernel/errors.js";
 import {
   type AllocateInput,
   type AgingBucket,
@@ -115,6 +116,74 @@ export class PgOpenItemRepository {
       [tenantId, itemId],
     );
     return toUnits(String(r.rows[0].allocated)) ?? 0n;
+  }
+
+  /**
+   * Settle a Customer Invoice (Tahap B8). 'Settled' means the invoice's
+   * AR open item is fully allocated (no remaining amount). Runs inside one
+   * transaction with the open-item row locked, mirroring allocate()'s
+   * concurrency posture.
+   */
+  async settleInvoice(input: {
+    tenantId: string;
+    invoiceId: string;
+    actorUserId: string;
+  }): Promise<{ invoiceId: string; arStatus: string }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const inv = await client.query(
+        `SELECT id, ar_status FROM customer_invoices
+          WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+        [input.invoiceId, input.tenantId],
+      );
+      if (!inv.rows[0]) {
+        await client.query("ROLLBACK");
+        throw new NotFoundError("CustomerInvoice", input.invoiceId);
+      }
+      if (inv.rows[0].ar_status === "settled") {
+        await client.query("COMMIT");
+        return { invoiceId: input.invoiceId, arStatus: "settled" };
+      }
+      if (inv.rows[0].ar_status !== "open") {
+        await client.query("ROLLBACK");
+        throw new ConflictError("Only an open invoice can be settled");
+      }
+      const oi = await client.query(
+        `SELECT oi.id, oi.original_amount,
+                (SELECT COALESCE(SUM(CASE WHEN al.reverses_id IS NULL THEN al.amount ELSE -al.amount END), 0)::text
+                   FROM finance_open_item_allocations al
+                  WHERE al.tenant_id = oi.tenant_id
+                    AND (al.source_open_item_id = oi.id OR al.target_open_item_id = oi.id)) AS allocated
+           FROM finance_open_items oi
+          WHERE oi.tenant_id = $1 AND oi.source_ref_table = 'customer_invoices'
+            AND oi.source_ref_id = $2
+          FOR UPDATE OF oi`,
+        [input.tenantId, input.invoiceId],
+      );
+      if (!oi.rows[0]) {
+        await client.query("ROLLBACK");
+        throw new ConflictError("No AR open item exists for this invoice");
+      }
+      const original = toUnits(String(oi.rows[0].original_amount)) ?? 0n;
+      const allocated = toUnits(String(oi.rows[0].allocated)) ?? 0n;
+      if (allocated < original) {
+        await client.query("ROLLBACK");
+        throw new ConflictError("Invoice is not fully allocated yet — allocate payments first");
+      }
+      const upd = await client.query(
+        `UPDATE customer_invoices SET ar_status = 'settled', updated_at = now()
+          WHERE id = $1 AND tenant_id = $2 RETURNING ar_status`,
+        [input.invoiceId, input.tenantId],
+      );
+      await client.query("COMMIT");
+      return { invoiceId: input.invoiceId, arStatus: upd.rows[0].ar_status };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /** Idempotent intake: a replayed document returns the original row. */

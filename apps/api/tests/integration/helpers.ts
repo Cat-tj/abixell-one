@@ -29,7 +29,15 @@ export async function bootstrapTenant(app: FastifyInstance, code: string, name: 
   if (response.statusCode !== 201) {
     throw new Error(`bootstrapTenant failed: ${response.statusCode} ${response.body}`);
   }
-  return response.json() as { id: string; code: string };
+  const tenant = response.json() as { id: string; code: string };
+  // Tenant creation now activates every module by default (the fresh-deploy
+  // fix). Tests that need the old all-inactive default de-activate explicitly
+  // via withModule, so the helper restores the zero state here.
+  await pool.query(
+    `UPDATE tenant_module_activations SET is_active = false WHERE tenant_id = $1`,
+    [tenant.id],
+  );
+  return tenant;
 }
 
 export async function provisionFirstAdmin(params: {

@@ -578,6 +578,9 @@ async function main() {
     "project.read",
     "site.read",
     "service.read",
+    // Notification read — the Customer portal surfaces task notifications on
+    // the role dashboard; without this the notifications block omits itself.
+    "notification.read",
   ];
   const customerUserPermissions = (
     await pool.query(`SELECT id FROM permissions WHERE code = ANY($1)`, [
@@ -1086,7 +1089,7 @@ async function main() {
   await pool.query(
     `INSERT INTO numbering_sequences (tenant_id, code, pattern, current_sequence)
      VALUES ($1, 'work_order', 'WO-{SEQ:5}', 0), ($1, 'customer_invoice', 'INV-{SEQ:5}', 0),
-            ($1, 'work_order_serving', 'SRV-{SEQ:5}', 0)`,
+            ($1, 'work_request', 'WR-{SEQ:5}', 0), ($1, 'work_order_serving', 'SRV-{SEQ:5}', 0)`,
     [tenant.id],
   );
 
@@ -1368,6 +1371,17 @@ async function main() {
       [tenant.id, markupParam.id, admin.id],
     );
   }
+
+  // Activate every business module for the demo tenant — matches the new
+  // tenant-creation default, so the demo application is usable immediately.
+  await pool.query(
+    `INSERT INTO tenant_module_activations (tenant_id, module_id, is_active, updated_by)
+     SELECT $1, m.id, true, NULL
+       FROM modules m
+      WHERE m.code <> 'platform'
+     ON CONFLICT (tenant_id, module_id) DO UPDATE SET is_active = true, updated_at = now()`,
+    [tenant.id],
+  );
 
   console.log("Seed complete:");
   console.log(`  Tenant code:        ${DEMO_TENANT_CODE}`);

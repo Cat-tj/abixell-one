@@ -84,6 +84,16 @@ export function registerOpenItemRoutes(app: FastifyInstance, container: Containe
     return reply.send(await svc().listAllocations(request.actor!, id));
   });
 
+  /** Tahap B8 — mark a Customer Invoice settled once fully allocated. */
+  app.post(
+    "/accounting/invoices/:id/settle",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      return reply.send(await svc().settleInvoice(request.actor!, id));
+    },
+  );
+
   app.post("/accounting/open-items/allocate", { preHandler: app.authenticate }, async (request, reply) => {
     const input = allocateSchema.parse(request.body);
     return reply.status(201).send(await svc().allocate(request.actor!, input));

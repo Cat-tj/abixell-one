@@ -7,6 +7,7 @@ import type { ActorContext } from "../../domain/shared-kernel/audit-context.js";
 import { ConflictError, NotFoundError } from "../../domain/shared-kernel/errors.js";
 import type { AuditService } from "../audit/audit.service.js";
 import type { RbacService } from "../rbac/rbac.service.js";
+import type { RbacRepository } from "../../domain/rbac/rbac.entity.js";
 
 /**
  * Tenant creation is a platform-bootstrap operation, not an RBAC-guarded
@@ -21,6 +22,7 @@ export class TenantService {
     private readonly repo: TenantRepository,
     private readonly audit: AuditService,
     private readonly rbac: RbacService,
+    private readonly rbacRepo: RbacRepository,
   ) {}
 
   async create(input: CreateTenantInput): Promise<ReturnType<TenantRepository["create"]>> {
@@ -29,6 +31,18 @@ export class TenantService {
       throw new ConflictError(`Tenant code '${input.code}' already exists`);
     }
     const tenant = await this.repo.create(input, null);
+    // Activate every business module for a newly provisioned Tenant. The
+    // module-activity write gate blocks every write on a tenant whose
+    // modules are all inactive, so a fresh deployment landed unable to
+    // accept a single write until an administrator flipped each switch by
+    // hand. Deactivation stays available afterwards.
+    await this.rbacRepo.activateAllModulesForTenant(tenant.id);
+    // Activate every business module for a newly provisioned Tenant. The
+    // module-activity rule blocks every write on a tenant whose modules are
+    // all inactive, so a fresh deployment was landing on an application that
+    // could not accept a single write until an administrator flipped each
+    // switch by hand. Platform module (identity/config) is exempt from that
+    // check and stays as-is; deactivation remains available afterwards.
     await this.audit.record({
       tenantId: tenant.id,
       actorUserId: null,

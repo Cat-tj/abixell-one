@@ -81,9 +81,9 @@ export const id: Record<MessageKey, string> = {
   "overview.welcomeFallback": "ruang kerja Anda",
   "overview.subtitle":
     "Pilih area untuk melanjutkan. Anda hanya melihat bagian yang diizinkan oleh akses Anda.",
-  "overview.emptyTitle": "Belum ada area kerja",
+  "overview.emptyTitle": "Akun Anda siap — menu menyusul",
   "overview.emptyDescription":
-    "Anda sudah masuk, tetapi belum ada tujuan yang tersedia untuk akun Anda. Hubungi administrator bila Anda mengharapkan akses tambahan.",
+    "Untuk saat ini akun Anda berfokus pada tugas yang dikirim langsung ke Anda (mis. lewat notifikasi). Bila Anda mengharapkan menu tambahan, hubungi administrator.",
   "overview.lockedFallback": "Anda tidak memiliki akses ke area ini.",
 
   // -------------------------------------------------------------- Profile
@@ -1128,6 +1128,8 @@ export const id: Record<MessageKey, string> = {
   "sharedServices.colChannel": "Kanal",
   "sharedServices.colCreated": "Dibuat",
   "sharedServices.colAction": "Aksi",
+  "sharedServices.colOpen": "Buka",
+  "sharedServices.openTask": "Buka tugas",
   "sharedServices.colActions": "Aksi",
   "sharedServices.colUploaded": "Diunggah",
   "sharedServices.colStatus": "Status",

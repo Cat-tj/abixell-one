@@ -81,7 +81,11 @@ export class PgNotificationRepository implements NotificationRepository {
 
   async listForRecipient(tenantId: string, recipientUserId: string, limit: number): Promise<Notification[]> {
     const result = await this.pool.query(
-      `SELECT * FROM notifications WHERE tenant_id = $1 AND recipient_user_id = $2 ORDER BY created_at DESC LIMIT $3`,
+      `SELECT n.*, de.entity_type AS entity_type, de.entity_id AS entity_id
+         FROM notifications n
+         LEFT JOIN domain_events de ON de.id = n.domain_event_id
+        WHERE n.tenant_id = $1 AND n.recipient_user_id = $2
+        ORDER BY n.created_at DESC LIMIT $3`,
       [tenantId, recipientUserId, limit],
     );
     return result.rows.map(mapNotification);
@@ -130,6 +134,8 @@ function mapNotification(row: QueryResultRow): Notification {
     tenantId: row.tenant_id,
     domainEventId: row.domain_event_id,
     eventType: row.event_type,
+    entityType: row.entity_type ?? null,
+    entityId: row.entity_id ?? null,
     channel: row.channel,
     recipientUserId: row.recipient_user_id,
     subject: row.subject,
