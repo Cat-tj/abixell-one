@@ -28,6 +28,7 @@ import { useT } from "../../../i18n/LocaleProvider";
 import {
   api,
   ApiError,
+  type AdminRoleSummary,
   type RoleDefinition,
   type RoleDefinitionOptions,
   type RoleDefinitionPermissionOption,
@@ -67,6 +68,7 @@ interface DefinitionDraft {
   /** Keyed by Window code, so membership is one lookup and a removal cannot
    *  leave a stale per-Window flag behind. */
   windows: Record<string, WindowDraft>;
+  includedRoleCodes: string[];
 }
 
 /** `null` (never had a description) and `""` (someone typed nothing) both
@@ -90,6 +92,7 @@ function draftFromDefinition(definition: RoleDefinition): DefinitionDraft {
     description: definition.description ?? "",
     permissionCodes: [...definition.permissionCodes].sort(),
     windows,
+    includedRoleCodes: [...definition.includedRoleCodes].sort(),
   };
 }
 
@@ -100,6 +103,8 @@ function sameDraft(a: DefinitionDraft, b: DefinitionDraft): boolean {
   if (a.description !== b.description) return false;
   if (a.permissionCodes.length !== b.permissionCodes.length) return false;
   if (a.permissionCodes.some((code, index) => code !== b.permissionCodes[index])) return false;
+  if (a.includedRoleCodes.length !== b.includedRoleCodes.length) return false;
+  if (a.includedRoleCodes.some((code, index) => code !== b.includedRoleCodes[index])) return false;
   const codes = Object.keys(a.windows);
   if (codes.length !== Object.keys(b.windows).length) return false;
   return codes.every((code) => {
@@ -134,6 +139,7 @@ export function AdminRoleDefinitionView({
 
   const [definition, setDefinition] = useState<RoleDefinition | null>(null);
   const [options, setOptions] = useState<RoleDefinitionOptions | null>(null);
+  const [roles, setRoles] = useState<AdminRoleSummary[] | null>(null);
   const [loadState, setLoadState] = useState<
     "loading" | "ready" | "denied" | "session-expired" | "error"
   >("loading");
@@ -181,13 +187,15 @@ export function AdminRoleDefinitionView({
     setLoadState("loading");
     setLoadError(null);
     try {
-      const [nextDefinition, nextOptions] = await Promise.all([
+      const [nextDefinition, nextOptions, nextRoles] = await Promise.all([
         api.roleDefinition(token, roleCode),
         api.roleDefinitionOptions(token),
+        api.adminRoles(token),
       ]);
       if (generation.current !== requestGeneration) return;
       setDefinition(nextDefinition);
       setOptions(nextOptions);
+      setRoles(nextRoles);
       setDraft(draftFromDefinition(nextDefinition));
       setLoadState("ready");
     } catch (err) {
@@ -258,6 +266,7 @@ export function AdminRoleDefinitionView({
           description: toDescription(draft.description),
           permissionCodes: draft.permissionCodes,
           windows: toWindows(),
+          includedRoleCodes: draft.includedRoleCodes,
         });
         setPreview({
           previewHash: result.previewHash,
@@ -286,6 +295,7 @@ export function AdminRoleDefinitionView({
         description: toDescription(draft.description),
         permissionCodes: draft.permissionCodes,
         windows: toWindows(),
+        includedRoleCodes: draft.includedRoleCodes,
         previewHash: preview.previewHash,
         confirm: true,
       });
@@ -512,6 +522,23 @@ export function AdminRoleDefinitionView({
               }
               onClear={() =>
                 setDraft((current) => (current ? { ...current, permissionCodes: [] } : current))
+              }
+            />
+
+            <IncludedRolesPicker
+              roles={roles}
+              currentRoleCode={definition.code}
+              selected={draft.includedRoleCodes}
+              disabled={!canManage}
+              onToggle={(code) =>
+                setDraft((current) => {
+                  if (!current) return current;
+                  const has = current.includedRoleCodes.includes(code);
+                  const next = has
+                    ? current.includedRoleCodes.filter((existing) => existing !== code)
+                    : [...current.includedRoleCodes, code].sort();
+                  return { ...current, includedRoleCodes: next };
+                })
               }
             />
 
@@ -924,6 +951,86 @@ function PermissionPicker({
   );
 }
 
+/* --------------------------------------------------------- included roles */
+
+/** iDempiere AD_Role_Included parity. The option list is the tenant's role
+ *  catalog (GET /admin/roles), which the server already filters to what the
+ *  actor may see; the server still refuses self-links, inactive roles, and
+ *  cycles, so this picker is a convenience, not the boundary.
+ *
+ *  ponytail: the catalog is the full role summary list, not an
+ *  "included-role options" endpoint - inactive roles are hidden here but the
+ *  server remains the authority; add a dedicated options route only if the
+ *  summary list ever becomes too coarse. */
+function IncludedRolesPicker({
+  roles,
+  currentRoleCode,
+  selected,
+  disabled,
+  onToggle,
+}: {
+  /** The catalog loads with the rest of the page, so it is never null here. */
+  roles: AdminRoleSummary[] | null;
+  currentRoleCode: string;
+  selected: string[];
+  disabled: boolean;
+  onToggle: (code: string) => void;
+}) {
+  const t = useT();
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const options = useMemo(() => {
+    if (!roles) return [];
+    return roles
+      .filter((role) => role.code !== currentRoleCode && role.isActive)
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }, [roles, currentRoleCode]);
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-ink">{t("roleDef.includedHeading")}</h2>
+          <p className="mt-0.5 text-sm text-ink-dim">{t("roleDef.includedDescription")}</p>
+        </div>
+        <p className="text-sm text-ink-dim" role="status" aria-live="polite">
+          {t("roleDef.includedSelected", { count: <span className="tabular-nums">{selected.length}</span> })}
+        </p>
+      </div>
+
+      {options.length === 0 ? (
+        <p className="mt-3 rounded border border-dashed border-line-strong bg-panel-2 px-4 py-6 text-center text-sm text-ink-dim">
+          {t("roleDef.includedEmpty")}
+        </p>
+      ) : (
+        <ul className="mt-3 rounded border border-line">
+          {options.map((option) => (
+            <li
+              key={option.code}
+              className={
+                'border-b border-line last:border-b-0 ' +
+                (selectedSet.has(option.code) ? 'bg-accent-soft' : 'hover:bg-panel-2')
+              }
+            >
+              <label className="flex min-h-row items-center gap-3 px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(option.code)}
+                  disabled={disabled}
+                  onChange={() => onToggle(option.code)}
+                  aria-label={t("roleDef.includedToggleAria", { code: option.code })}
+                  className="h-4 w-4 accent-(--accent)"
+                />
+                <code className="font-mono text-xs font-medium text-ink">{option.code}</code>
+                <span className="min-w-0 truncate text-ink-dim">{option.name}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 /* ----------------------------------------------------------- window picker */
 
 function WindowPicker({
@@ -1200,6 +1307,7 @@ export function CreateRoleDialog({
             description,
             permissionCodes: [],
             windows: [],
+            includedRoleCodes: [],
           });
         }
         if (lifetime.current !== life) return;

@@ -650,6 +650,13 @@ export const en = {
   "roleDef.winModuleAria": "Filter windows by module",
   "roleDef.winSelectedOnly": "Selected only",
   "roleDef.winEmpty": "No Window matches this filter.",
+  // Included roles (AD_Role_Included parity)
+  "roleDef.includedHeading": "Included roles",
+  "roleDef.includedDescription": "Roles whose grants this Role inherits. The server refuses self-links, inactive roles, and cycles.",
+  "roleDef.includedSelected": "{count} included",
+  "roleDef.includedEmpty": "No other active Role exists in this tenant.",
+  "roleDef.includedToggleAria": "Include role {code}",
+
   "roleDef.winColInclude": "Include",
   "roleDef.winColWindow": "Window",
   "roleDef.winColRequired": "Required permission",

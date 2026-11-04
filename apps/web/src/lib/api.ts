@@ -2969,6 +2969,9 @@ export type RoleDefinition = {
   version: number;
   permissionCodes: string[];
   windows: WindowAccessInput[];
+  /** iDempiere AD_Role_Included parity — Roles whose grants this Role
+   * effectively inherits, ordered by code. Excludes the Role itself. */
+  includedRoleCodes: string[];
   /** Read server-side from the census of routes the server actually serves
    * (Epic 4 step 11b). `"partial"` means at least one mutating route resolves
    * to no Window and carries no exemption, so it sits outside the read-only
@@ -3017,6 +3020,7 @@ export type RoleDefinitionFields = {
   description: string | null;
   permissionCodes: string[];
   windows: WindowAccessInput[];
+  includedRoleCodes: string[];
 };
 
 /** Create omits `version` deliberately: the server's create schema is strict

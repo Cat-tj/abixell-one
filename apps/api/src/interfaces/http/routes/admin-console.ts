@@ -116,6 +116,7 @@ const MAX_ROLE_NAME_LENGTH = 200;
 const MAX_ROLE_DESCRIPTION_LENGTH = 500;
 const MAX_GRANT_CODES = 500;
 const MAX_WINDOWS = 500;
+const MAX_INCLUDED_ROLES = 50;
 
 const windowAccessSchema = z
   .object({
@@ -129,6 +130,7 @@ function rejectDuplicates(
   value: {
     permissionCodes: string[];
     windows: { windowCode: string }[];
+    includedRoleCodes: string[];
   },
   ctx: z.RefinementCtx,
 ) {
@@ -147,6 +149,14 @@ function rejectDuplicates(
       path: ["windows"],
     });
   }
+  const includedCodes = value.includedRoleCodes;
+  if (new Set(includedCodes).size !== includedCodes.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Duplicate included role codes are not allowed",
+      path: ["includedRoleCodes"],
+    });
+  }
 }
 
 const definitionFields = {
@@ -155,6 +165,9 @@ const definitionFields = {
     .array(z.string().min(1).max(MAX_ROLE_CODE_LENGTH))
     .max(MAX_GRANT_CODES),
   windows: z.array(windowAccessSchema).max(MAX_WINDOWS),
+  includedRoleCodes: z
+    .array(z.string().min(1).max(MAX_ROLE_CODE_LENGTH))
+    .max(MAX_INCLUDED_ROLES),
 };
 
 /** Epic 4 open item 1 — operator-authored Role metadata. `.nullable()` because

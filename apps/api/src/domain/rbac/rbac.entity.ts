@@ -276,6 +276,9 @@ export interface RoleDefinition {
   version: number;
   permissionCodes: string[];
   windows: WindowAccessInput[];
+  /** iDempiere AD_Role_Included parity — codes of the Roles whose grants this
+   * Role effectively inherits, ordered by code. Excludes this Role itself. */
+  includedRoleCodes: string[];
   /** Epic 4 step 11b — derived from the API Resource → Window mapping, never
    * hard-coded: `"partial"` while any mutating route the server declared
    * resolves to no Window, `"enforced"` once every one does. See
@@ -302,6 +305,7 @@ export interface CreateRoleDefinitionInput {
   description?: string | null;
   permissionCodes: string[];
   windows: WindowAccessInput[];
+  includedRoleCodes: string[];
 }
 
 export interface CopyRoleDefinitionInput {
@@ -319,6 +323,7 @@ export interface RoleDefinitionPreviewInput {
   description?: string | null;
   permissionCodes: string[];
   windows: WindowAccessInput[];
+  includedRoleCodes: string[];
 }
 
 export interface UpdateRoleDefinitionInput extends RoleDefinitionPreviewInput {

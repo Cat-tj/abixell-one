@@ -168,10 +168,12 @@ function computeDefinitionHash(
   name: string,
   permissionCodes: string[],
   windows: WindowAccessInput[],
+  includedRoleCodes: string[],
 ): string {
   const canonical = {
     name,
     permissionCodes: [...new Set(permissionCodes)].sort(),
+    includedRoleCodes: [...new Set(includedRoleCodes)].sort(),
     windows: [...windows]
       .map((w) => ({
         windowCode: w.windowCode,
@@ -2596,6 +2598,12 @@ export class PgRbacRepository implements RbacRepository {
         [actor.tenantId, input.code, input.name, input.description ?? null],
       );
       const roleId = inserted.rows[0].id as string;
+      const includedIds = await this.validateProposedIncludedRoles(
+        client,
+        actor.tenantId,
+        roleId,
+        input.includedRoleCodes,
+      );
       await this.writeRoleGrants(
         client,
         actor.tenantId,
@@ -2603,6 +2611,7 @@ export class PgRbacRepository implements RbacRepository {
         permissionCodes,
         windows,
       );
+      await this.writeIncludedRoles(client, actor.tenantId, roleId, includedIds);
 
       const definition = await this.loadRoleDefinition(client, {
         id: roleId,
@@ -2668,6 +2677,18 @@ export class PgRbacRepository implements RbacRepository {
            FROM role_window_access WHERE tenant_id = $1 AND role_id = $2`,
         [actor.tenantId, sourceId],
       );
+      // A copy carries the source's included roles too — same rule as the
+      // description: the copy starts as a copy of the original in every
+      // operator-visible respect. Self-links cannot occur in stored data.
+      const sourceIncluded = await client.query(
+        `SELECT r.code
+           FROM role_included ri
+           JOIN roles r ON r.id = ri.included_role_id
+          WHERE ri.tenant_id = $1 AND ri.parent_role_id = $2
+            AND ri.included_role_id <> $2
+          ORDER BY r.code`,
+        [actor.tenantId, sourceId],
+      );
 
       const forNew = new Set<string>();
       const permissionCodes = await this.validateProposedGrants(
@@ -2710,6 +2731,12 @@ export class PgRbacRepository implements RbacRepository {
         [actor.tenantId, input.code, input.name, copyDescription],
       );
       const roleId = inserted.rows[0].id as string;
+      const includedIds = await this.validateProposedIncludedRoles(
+        client,
+        actor.tenantId,
+        roleId,
+        sourceIncluded.rows.map((r: { code: string }) => r.code),
+      );
       await this.writeRoleGrants(
         client,
         actor.tenantId,
@@ -2717,6 +2744,7 @@ export class PgRbacRepository implements RbacRepository {
         permissionCodes,
         windows,
       );
+      await this.writeIncludedRoles(client, actor.tenantId, roleId, includedIds);
 
       const definition = await this.loadRoleDefinition(client, {
         id: roleId,
@@ -2771,6 +2799,12 @@ export class PgRbacRepository implements RbacRepository {
         input.windows,
         existingWindows,
       );
+      const includedIds = await this.validateProposedIncludedRoles(
+        client,
+        actor.tenantId,
+        role.id,
+        input.includedRoleCodes,
+      );
       const affectedUserCount = await this.countRoleAssignments(
         client,
         actor.tenantId,
@@ -2788,6 +2822,7 @@ export class PgRbacRepository implements RbacRepository {
         version: input.version,
         permissionCodes,
         windows,
+        includedRoleCodes: includedIds,
         enforcementStatus: windowEnforcementStatus(),
       };
       return {
@@ -2797,7 +2832,12 @@ export class PgRbacRepository implements RbacRepository {
         // invalidate a preview that was approved for its permission change.
         // Version still moves on a description-only update, which is the token
         // keeping a stale preview out.
-        previewHash: computeDefinitionHash(input.name, permissionCodes, windows),
+        previewHash: computeDefinitionHash(
+          input.name,
+          permissionCodes,
+          windows,
+          input.includedRoleCodes,
+        ),
         affectedUserCount,
       };
     });
@@ -2822,6 +2862,7 @@ export class PgRbacRepository implements RbacRepository {
         input.name,
         input.permissionCodes,
         input.windows,
+        input.includedRoleCodes,
       );
       if (expectedHash !== input.previewHash) {
         throw new ConflictError(
@@ -2843,6 +2884,12 @@ export class PgRbacRepository implements RbacRepository {
         input.windows,
         existingWindows,
       );
+      const includedIds = await this.validateProposedIncludedRoles(
+        client,
+        actor.tenantId,
+        role.id,
+        input.includedRoleCodes,
+      );
 
       // §4.4 B: `version` is a concurrency token for DEFINITION changes. When
       // the accepted request re-states the definition the Role already holds,
@@ -2854,7 +2901,8 @@ export class PgRbacRepository implements RbacRepository {
         input.name === current.name &&
         nextDescription === current.description &&
         sameStringArrays(permissionCodes, current.permissionCodes) &&
-        sameWindows(windows, current.windows)
+        sameWindows(windows, current.windows) &&
+        sameStringArrays(includedIds, current.includedRoleCodes)
       ) {
         return current;
       }
@@ -2878,6 +2926,7 @@ export class PgRbacRepository implements RbacRepository {
         `DELETE FROM role_window_access WHERE tenant_id = $1 AND role_id = $2`,
         [actor.tenantId, role.id],
       );
+      await this.writeIncludedRoles(client, actor.tenantId, role.id, includedIds);
       await this.writeRoleGrants(
         client,
         actor.tenantId,
@@ -3102,6 +3151,15 @@ export class PgRbacRepository implements RbacRepository {
         ORDER BY window_code`,
       [role.tenant_id, role.id],
     );
+    const included = await client.query(
+      `SELECT r.code
+         FROM role_included ri
+         JOIN roles r ON r.id = ri.included_role_id
+        WHERE ri.tenant_id = $1 AND ri.parent_role_id = $2
+          AND ri.included_role_id <> $3
+        ORDER BY r.code`,
+      [role.tenant_id, role.id, role.id],
+    );
     return {
       id: role.id,
       tenantId: role.tenant_id,
@@ -3112,6 +3170,7 @@ export class PgRbacRepository implements RbacRepository {
       isFullAccess: role.is_full_access,
       version: role.version,
       permissionCodes: permissions.rows.map((r: { code: string }) => r.code),
+      includedRoleCodes: included.rows.map((r: { code: string }) => r.code),
       windows: windows.rows.map(
         (r: {
           window_code: string;
@@ -3373,6 +3432,87 @@ export class PgRbacRepository implements RbacRepository {
       }
     }
     return codes.sort();
+  }
+
+  /** iDempiere AD_Role_Included parity: codes must reference existing
+   * ACTIVE Roles in the same tenant, never the Role itself, and the graph
+   * must stay acyclic — resolved from the parent AFTER the proposed links,
+   * the parent may not come back into view (same depth guard as the
+   * runtime resolver, 8). */
+  private async validateProposedIncludedRoles(
+    client: PoolClient,
+    tenantId: string,
+    parentRoleId: string,
+    proposed: readonly string[],
+  ): Promise<string[]> {
+    const codes = [...new Set(proposed)];
+    if (codes.length !== proposed.length) {
+      throw new ValidationError("Duplicate included role codes are not allowed");
+    }
+    if (codes.length === 0) return [];
+    const catalog = await client.query(
+      `SELECT id, code, COALESCE(is_active, true) AS is_active
+         FROM roles
+        WHERE tenant_id = $1 AND code = ANY($2::text[])`,
+      [tenantId, codes],
+    );
+    const byCode = new Map(
+      catalog.rows.map((r: { id: string; code: string; is_active: boolean }) => [r.code as string, r]),
+    );
+    const ids: string[] = [];
+    for (const code of codes) {
+      const role = byCode.get(code);
+      if (!role) throw new ValidationError(`Unknown role code '${code}'`);
+      if (role.id === parentRoleId)
+        throw new ValidationError("A Role cannot include itself");
+      if (!role.is_active)
+        throw new ValidationError(`Role '${code}' is not active`);
+      ids.push(role.id as string);
+    }
+    // Cycle check: walk included edges from the parent as if the proposed
+    // rows were already inserted; the parent reappearing means a cycle.
+    const seen = new Set<string>([parentRoleId]);
+    let frontier = [parentRoleId, ...ids];
+    for (let depth = 0; depth < 8 && frontier.length > 0; depth++) {
+      const r = await client.query(
+        `SELECT included_role_id FROM role_included
+          WHERE tenant_id = $1 AND parent_role_id = ANY($2::uuid[])`,
+        [tenantId, frontier],
+      );
+      frontier = r.rows
+        .map((row: { included_role_id: string }) => row.included_role_id as string)
+        .filter((id: string) => !seen.has(id));
+      for (const id of frontier) {
+        if (id === parentRoleId) {
+          throw new ValidationError(
+            "Including these Roles would create a cycle",
+          );
+        }
+        seen.add(id);
+      }
+    }
+    return codes.sort();
+  }
+
+  /** Delete-then-insert inside the caller's transaction, same shape as the
+   * other grant rewrites in updateRoleDefinition. */
+  private async writeIncludedRoles(
+    client: PoolClient,
+    tenantId: string,
+    roleId: string,
+    includedRoleIds: readonly string[],
+  ): Promise<void> {
+    await client.query(
+      `DELETE FROM role_included WHERE tenant_id = $1 AND parent_role_id = $2`,
+      [tenantId, roleId],
+    );
+    for (const id of includedRoleIds) {
+      await client.query(
+        `INSERT INTO role_included (tenant_id, parent_role_id, included_role_id)
+         VALUES ($1, $2, $3)`,
+        [tenantId, roleId, id],
+      );
+    }
   }
 
   /** Same preservation rule as permissions, applied to window access rows. */

@@ -659,6 +659,13 @@ export const id: Record<MessageKey, string> = {
   "roleDef.winModuleAria": "Saring window menurut modul",
   "roleDef.winSelectedOnly": "Hanya yang dipilih",
   "roleDef.winEmpty": "Tidak ada Window yang cocok dengan saringan ini.",
+  // Included roles (paritas AD_Role_Included)
+  "roleDef.includedHeading": "Peran yang disertakan",
+  "roleDef.includedDescription": "Peran yang hibahnya diwarisi oleh Peran ini. Server menolak tautan-ke-diri-sendiri, peran nonaktif, dan siklus.",
+  "roleDef.includedSelected": "{count} disertakan",
+  "roleDef.includedEmpty": "Tidak ada Peran aktif lain di tenant ini.",
+  "roleDef.includedToggleAria": "Sertakan peran {code}",
+
   "roleDef.winColInclude": "Sertakan",
   "roleDef.winColWindow": "Window",
   "roleDef.winColRequired": "Izin yang diperlukan",
