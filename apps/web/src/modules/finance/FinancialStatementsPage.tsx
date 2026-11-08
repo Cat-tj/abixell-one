@@ -279,7 +279,7 @@ export function FinancialStatementsPage() {
                 })}
               </h2>
               <Card className="mb-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("finStmt.stillOpen")}</p>
+                <p className="text-xs font-bold text-ink-faint">{t("finStmt.stillOpen")}</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums text-ink">
                   {formatMoney(aging.totalOpen)}{" "}
                   <span className="text-sm font-normal text-ink-dim">{aging.currency}</span>

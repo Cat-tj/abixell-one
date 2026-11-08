@@ -20,7 +20,7 @@ export function ThemeToggle() {
     <div
       role="group"
       aria-label="Colour theme"
-      className="inline-flex shrink-0 rounded border border-line-strong bg-panel p-0.5"
+      className="inline-flex shrink-0 rounded-full border border-line-strong bg-panel p-1"
     >
       {OPTIONS.map((option) => {
         const selected = theme === option.value;
@@ -30,9 +30,9 @@ export function ThemeToggle() {
             type="button"
             aria-pressed={selected}
             onClick={() => setTheme(option.value)}
-            className={`inline-flex min-h-[44px] flex-1 items-center justify-center rounded px-2.5 lg:min-h-[26px] text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent sm:min-h-[26px] ${
+            className={`inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-3 lg:min-h-[32px] text-xs font-bold transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent sm:min-h-[32px] ${
               selected
-                ? "bg-accent text-accent-on"
+                ? "bg-accent-soft text-accent"
                 : "text-ink-dim hover:bg-panel-2 hover:text-ink"
             }`}
           >

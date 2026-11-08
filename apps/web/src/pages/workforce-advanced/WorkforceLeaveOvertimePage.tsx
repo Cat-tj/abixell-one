@@ -316,7 +316,7 @@ export function WorkforceLeaveOvertimePage() {
                   "Actual overtime recorded.",
                 )}
               >
-                Save
+                {t("common.save")}
               </Button>
             </div>
           ) : null}

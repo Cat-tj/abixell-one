@@ -454,10 +454,10 @@ export function ProjectDeliveryAdvancedPlanningPage() {
           </div>
           <div className="mt-3 flex gap-2">
             <Button disabled={busy} onClick={() => createWbs()}>
-              Create
+              {t("common.create")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </Card>
@@ -483,10 +483,10 @@ export function ProjectDeliveryAdvancedPlanningPage() {
           </div>
           <div className="mt-3 flex gap-2">
             <Button disabled={busy} onClick={() => createBaseline()}>
-              Create
+              {t("common.create")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </Card>

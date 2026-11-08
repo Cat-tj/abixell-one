@@ -13,6 +13,8 @@ export const id: Record<MessageKey, string> = {
   // ---------------------------------------------------------------- Login
   "login.title": "Enterprise Management System",
   "login.subtitle": "Masuk untuk melanjutkan",
+  "login.formTitle": "Masuk",
+  "login.tagline": "Operasional, tenaga kerja, gudang, dan keuangan dalam satu tempat.",
   "login.email": "Email",
   "login.password": "Kata sandi",
   "login.submit": "Masuk",
@@ -110,6 +112,7 @@ export const id: Record<MessageKey, string> = {
   "profile.currentInvalid": "Kata sandi saat ini tidak valid.",
 
   // ------------------------------------------------------- Shared controls
+  "common.create": "Buat",
   "common.cancel": "Batal",
   "common.save": "Simpan",
   "common.saving": "Menyimpan…",
@@ -4501,6 +4504,7 @@ export const id: Record<MessageKey, string> = {
   "mo.woq.msg.workOrderCreated": "Work order dibuat.",
   "mo.woq.p.whatNeedsDoing": "Apa yang perlu dikerjakan",
   "mo.woq.sub.planAssignAndFollowTheWorkYourTeamsAreDe": "Rencanakan, tugaskan, dan ikuti pekerjaan yang sedang dikerjakan tim Anda.",
+  "mo.woq.b.create": "Buat",
   "mo.woq.t.createWorkOrder": "Buat work order",
   "mo.woq.t.select": "Pilih…",
   "mo.woq.title.noWorkOrdersYet": "Belum ada work order",

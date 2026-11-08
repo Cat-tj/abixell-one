@@ -6,6 +6,19 @@ Arah visual untuk seluruh produk. Ditulis dari keputusan pemilik produk
 Setiap keputusan di bawah mengikat semua
 pekerjaan UI — UI yang melanggar arah ini adalah cacat, bukan selera.
 
+> **Pembaruan 2026-11-08 — mengikuti tampilan Altora Store.** Atas permintaan
+> pemilik produk, token di `apps/web/src/index.css` kini memakai gaya Altora
+> Store (`/Users/icat/Projects/altora-bearing-store/public/app.css`). Bagian
+> warna, tipografi, kepadatan, dan bentuk di bawah ini digantikan oleh nilai
+> berikut, sedangkan prinsip lainnya tetap berlaku:
+>
+> - Font Plus Jakarta Sans (di-host sendiri lewat `@fontsource-variable`), teks
+>   isi 15px, judul halaman 800.
+> - Satu aksen navy `#12355B` (hover `#0C2743`), latar `#F6F7F9`, garis
+>   `#E2E6EB`.
+> - Sudut 12px untuk kontrol, 18px untuk kartu; tombol dan status berbentuk pil.
+> - Baris tabel dan kontrol 40px. Label tidak lagi huruf kapital semua.
+
 ## 1. Karakter
 
 **Instrumen panel yang ramah dan hangat.**

@@ -761,7 +761,7 @@ function RevokeAssignmentDialog({
         <div>
           <label
             htmlFor="revoke-reason"
-            className="block text-xs font-semibold uppercase tracking-wide text-ink-dim"
+            className="block text-xs font-bold text-ink-dim"
           >
             {t("adminUsers.reasonField")}
           </label>
@@ -794,7 +794,7 @@ function RevokeAssignmentDialog({
 function SummaryItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-semibold uppercase tracking-wide text-ink-dim">{label}</dt>
+      <dt className="text-xs font-bold text-ink-dim">{label}</dt>
       <dd className="mt-1 wrap-break-word text-ink">{children}</dd>
     </div>
   );

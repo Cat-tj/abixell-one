@@ -321,27 +321,27 @@ export function AssetPerformancePage() {
           {reliability ? (
             <div className="mt-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-4 lg:grid-cols-6">
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.availability")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.availability")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.availabilityPct}%</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">MTBF</div>
+                <div className="text-xs font-mediumr text-slate-400">MTBF</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.mtbfHours} hrs</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">MTTR</div>
+                <div className="text-xs font-mediumr text-slate-400">MTTR</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.mttrHours} hrs</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.failures")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.failures")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.correctiveFailureCount}</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.downtime")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.downtime")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.downtimeHours} hrs</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.operating")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.operating")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.operationalHours} hrs</div>
               </div>
             </div>
@@ -366,7 +366,7 @@ export function AssetPerformancePage() {
           ) : null}
 
           <div className="mt-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">{t("sca.perf.t.historicalSnapshots")}</h3>
+            <h3 className="mb-2 text-xs font-semiboldr text-slate-500">{t("sca.perf.t.historicalSnapshots")}</h3>
             <DataTable
               columns={snapshotColumns}
               rows={snapshots}

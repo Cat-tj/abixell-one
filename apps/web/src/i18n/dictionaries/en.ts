@@ -10,6 +10,8 @@ export const en = {
   // ---------------------------------------------------------------- Login
   "login.title": "Enterprise Management System",
   "login.subtitle": "Sign in to continue",
+  "login.formTitle": "Sign in",
+  "login.tagline": "Operations, workforce, warehouse, and finance in one place.",
   "login.email": "Email",
   "login.password": "Password",
   "login.submit": "Sign in",
@@ -107,6 +109,7 @@ export const en = {
   "profile.currentInvalid": "Current password is not valid.",
 
   // ------------------------------------------------------- Shared controls
+  "common.create": "Create",
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.saving": "Saving…",
@@ -4524,6 +4527,7 @@ export const en = {
   "mo.woq.msg.workOrderCreated": "Work order created.",
   "mo.woq.p.whatNeedsDoing": "What needs doing",
   "mo.woq.sub.planAssignAndFollowTheWorkYourTeamsAreDe": "Plan, assign, and follow the work your teams are delivering.",
+  "mo.woq.b.create": "Create",
   "mo.woq.t.createWorkOrder": "Create work order",
   "mo.woq.t.select": "Select…",
   "mo.woq.title.noWorkOrdersYet": "No work orders yet",

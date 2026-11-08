@@ -1,11 +1,12 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/plus-jakarta-sans';
 
 /*
- * Typography: DESIGN.md §4/§7 — neutral system sans for text, system mono for
- * numbers and codes. No font files are downloaded (family decision is open).
+ * Typography follows Altora Store: Plus Jakarta Sans, self-hosted from
+ * @fontsource-variable so no request leaves the app. System mono stays for codes.
  */
 :root {
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-code: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   /* Depth comes from 1px lines and surface steps, not shadows (DESIGN.md §5).
      Only floating overlays (dialog, menu, drawer) get a shadow. */
@@ -136,30 +137,30 @@
   --color-blue-800: var(--accent-line);
   --color-indigo-600: var(--accent-line);
 
-  /* Type scale (DESIGN.md §4): body 13px / 1.45, page title 19px. */
-  --text-xs: 0.75rem;
+  /* Type scale (Altora Store look): body 15px / 1.5, page title ~27px. */
+  --text-xs: 0.8125rem;
   --text-xs--line-height: 1.4;
-  --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.45;
-  --text-base: 0.875rem;
-  --text-base--line-height: 1.45;
-  --text-lg: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.0625rem;
   --text-lg--line-height: 1.35;
-  --text-xl: 1.1875rem;
-  --text-xl--line-height: 1.3;
-  --text-2xl: 1.375rem;
-  --text-2xl--line-height: 1.25;
-  --text-3xl: 1.625rem;
-  --text-3xl--line-height: 1.2;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 1.7rem;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 1.15;
 
-  /* Shape (DESIGN.md §5): one 3px radius everywhere; pills are explicit. */
-  --radius-xs: 2px;
-  --radius-sm: 3px;
-  --radius-md: 3px;
-  --radius-lg: 3px;
-  --radius-xl: 4px;
-  --radius-2xl: 4px;
-  --radius-3xl: 4px;
+  /* Shape (Altora Store look): soft 12px controls, 18px cards. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 18px;
+  --radius-3xl: 24px;
 
   /* No decorative shadows; overlays opt in via shadow-lg / shadow-2xl. */
   --shadow-2xs: none;
@@ -219,37 +220,37 @@
 :root {
   color-scheme: light;
 
-  /* Values are DESIGN.md §2 verbatim. Cool neutrals, one accent. */
-  --bg: #f2f4f7;
+  /* Altora Store palette: cool neutrals, one navy accent. */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-2: #f7f8fa;
-  --surface-3: #eef1f5;
-  --border: #dde2e8;
-  --border-strong: #c3cad3;
+  --surface-2: #f2f4f7;
+  --surface-3: #e8edf3;
+  --border: #e2e6eb;
+  --border-strong: #d3d9e1;
 
-  --text: #171a1f;
-  --text-dim: #4b5361;
-  --text-faint: #606a78;
+  --text: #14202e;
+  --text-dim: #2b3a4b;
+  --text-faint: #566373;
 
-  --accent: #4a5be8;
-  --accent-line: #3946c7;            /* hover / pressed */
-  --accent-soft: rgba(74, 91, 232, 0.1);
+  --accent: #12355b;
+  --accent-line: #0c2743;            /* hover / pressed */
+  --accent-soft: #e8edf3;
   --accent-on: #ffffff;
 
-  --ok: #0f7a4a;
+  --ok: #16703a;
   --warn: #8a5a00;
-  --danger: #b32b22;
-  --idle: #55606e;
+  --danger: #c62828;
+  --idle: #566373;
 
-  --ok-soft: rgba(15, 122, 74, 0.1);
-  --warn-soft: rgba(138, 90, 0, 0.11);
-  --danger-soft: rgba(179, 43, 34, 0.09);
-  --idle-soft: rgba(85, 96, 110, 0.1);
+  --ok-soft: #e8f6ee;
+  --warn-soft: #fff4dc;
+  --danger-soft: #fdecec;
+  --idle-soft: #f2f4f7;
 
-  /* Density and shape (DESIGN.md §3, §5). */
-  --row: 32px;
-  --control: 28px;
-  --radius: 3px;
+  /* Density and shape: roomier rows and controls, like Altora Store. */
+  --row: 40px;
+  --control: 40px;
+  --radius: 12px;
 }
 
 [data-theme="dark"] {
@@ -266,9 +267,9 @@
   --text-dim: #a9b2bf;
   --text-faint: #8a93a1;
 
-  --accent: #6b7cff;
-  --accent-line: #8794ff;
-  --accent-soft: rgba(107, 124, 255, 0.16);
+  --accent: #8fb3dc;
+  --accent-line: #b0cbea;
+  --accent-soft: rgba(143, 179, 220, 0.16);
   --accent-on: #0e1017;
 
   --ok: #35c08a;
@@ -294,8 +295,9 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: 0.005em;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -314,8 +316,8 @@ input[type="number"] {
 
 /* Keyboard focus is always visible (DESIGN.md §5): 2px accent ring. */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 input:focus-visible,
 select:focus-visible,
@@ -340,4 +342,20 @@ textarea:focus-visible {
 /* Tailwind's bare `rounded` is a fixed 0.25rem; pin it to the one radius. */
 .rounded {
   border-radius: var(--radius);
+}
+
+/* Headings use the heavier Altora weight with tight tracking. */
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+h1 {
+  letter-spacing: -0.02em;
+}
+/* Sidebar group titles stay lighter, like Altora Store's nav titles. */
+nav h2 {
+  font-weight: 700;
+  letter-spacing: 0;
 }

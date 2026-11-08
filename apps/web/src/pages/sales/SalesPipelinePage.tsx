@@ -564,7 +564,7 @@ export function SalesPipelinePage() {
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 {pipelineSummaries.map((pipe) => (
                   <Card key={pipe.stageCode} className="p-3">
-                    <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <div className="text-xs font-bold text-slate-500r">
                       {pipe.stageCode}
                     </div>
                     <div className="text-xl font-bold text-slate-900 mt-1">
@@ -674,7 +674,7 @@ export function SalesPipelinePage() {
                       {/* Stage Transition Form */}
                       {canManageSales && (
                         <form onSubmit={handleStageChange} className="space-y-3 pt-2 border-t border-slate-200">
-                          <div className="text-xs font-semibold uppercase text-slate-600">
+                          <div className="text-xs font-bold text-slate-600">
                             Advance Stage
                           </div>
                           <Field label={t("sc.sales.f.targetStage")}>
@@ -705,7 +705,7 @@ export function SalesPipelinePage() {
 
                       {/* Stage History */}
                       <div className="pt-3 border-t border-slate-200 space-y-2">
-                        <div className="text-xs font-semibold uppercase text-slate-600">
+                        <div className="text-xs font-bold text-slate-600">
                           Stage Timeline
                         </div>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -819,7 +819,7 @@ export function SalesPipelinePage() {
 
                     {/* Line Items */}
                     <div className="pt-2 border-t border-slate-200">
-                      <div className="text-xs font-semibold uppercase text-slate-600 mb-2">
+                      <div className="text-xs font-bold text-slate-600 mb-2">
                         Line Items
                       </div>
                       <div className="space-y-2">

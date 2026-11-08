@@ -455,7 +455,7 @@ export function FinanceBudgetsPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-faint">
+                        <tr className="border-b border-line text-left text-xs text-ink-faint">
                           <th className="py-2 pr-3">{t("finBudget.period")}</th>
                           <th className="py-2 pr-3 text-right">{t("finBudget.baseline")}</th>
                           <th className="py-2 pr-3 text-right">{t("finBudget.actual")}</th>

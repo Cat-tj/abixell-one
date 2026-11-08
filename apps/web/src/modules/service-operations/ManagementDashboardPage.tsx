@@ -14,7 +14,7 @@ import { Alert, Card, Field, Input, PageHeader, Spinner } from "../../shell/comp
 function KpiTile({ label, kpi }: { label: string; kpi: { value: string; unit: string; dataPoints: number } }) {
   return (
     <Card>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-bold text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-bold text-slate-900">
         {kpi.value}
         <span className="ml-1 text-sm font-normal text-slate-500">{kpi.unit}</span>

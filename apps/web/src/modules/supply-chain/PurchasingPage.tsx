@@ -204,7 +204,7 @@ export function PurchasingPage() {
                 setPrQuantity("");
               }}
             >
-              Create
+              {t("common.create")}
             </Button>
           </div>
         </div>

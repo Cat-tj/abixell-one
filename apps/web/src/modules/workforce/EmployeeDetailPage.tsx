@@ -184,7 +184,7 @@ export function EmployeeDetailPage() {
           </div>
         </dl>
 
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("mw.empd.t.recordAPlacementChange")}</h3>
+        <h3 className="mb-2 text-xs font-bold text-slate-500">{t("mw.empd.t.recordAPlacementChange")}</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label={t("mw.empd.f.organizationUnit")}>
             <Select value={newUnit} onChange={(e) => setNewUnit(e.target.value)}>

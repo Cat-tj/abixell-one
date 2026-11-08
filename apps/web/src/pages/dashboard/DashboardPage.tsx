@@ -72,7 +72,7 @@ export function DashboardPage() {
                       className={`p-4 ${clickable ? "cursor-pointer transition hover:border-slate-300 hover:shadow-sm" : ""}`}
                       onClick={clickable ? () => navigate(targetUrl(target)) : undefined}
                     >
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{card.label}</p>
+                      <p className="text-xs font-bold text-slate-500">{card.label}</p>
                       <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{card.value}</p>
                     </Card>
                   );

@@ -124,7 +124,7 @@ export function ServiceDefinitionsPage() {
                 await load();
               }}
             >
-              Create
+              {t("common.create")}
             </Button>
           </div>
         </div>

@@ -117,7 +117,7 @@ export function SuppliersPage() {
                 }
               }}
             >
-              Create
+              {t("common.create")}
             </Button>
           </div>
         </div>

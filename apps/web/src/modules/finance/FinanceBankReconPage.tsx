@@ -425,15 +425,15 @@ export function FinanceBankReconPage() {
         {movement ? (
           <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
             <div>
-              <span className="text-xs uppercase tracking-wide text-ink-faint">{t("finRecon.bookMovement")}</span>
+              <span className="text-xs text-ink-faint">{t("finRecon.bookMovement")}</span>
               <div className="tabular-nums text-ink">{formatMoney(movement.bookMovement)}</div>
             </div>
             <div>
-              <span className="text-xs uppercase tracking-wide text-ink-faint">{t("finRecon.statementMovement")}</span>
+              <span className="text-xs text-ink-faint">{t("finRecon.statementMovement")}</span>
               <div className="tabular-nums text-ink">{formatMoney(movement.statementMovement)}</div>
             </div>
             <div>
-              <span className="text-xs uppercase tracking-wide text-ink-faint">{t("finRecon.difference")}</span>
+              <span className="text-xs text-ink-faint">{t("finRecon.difference")}</span>
               <div className="tabular-nums text-ink">{formatMoney(movement.difference)}</div>
             </div>
           </div>

@@ -174,7 +174,7 @@ export function EmployeesPage() {
               <Input type="date" value={joinedAt} onChange={(e) => setJoinedAt(e.target.value)} />
             </Field>
             <Button disabled={busy || !fullName} onClick={() => void createEmployee()}>
-              Create
+              {t("common.create")}
             </Button>
           </div>
         </div>

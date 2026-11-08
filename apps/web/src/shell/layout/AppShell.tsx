@@ -103,10 +103,10 @@ function NavRow({
 }) {
   const Icon = nested ? childPageIcon(page.code) : pageIcon(page.code);
   const base = collapsed
-    ? "flex min-h-[44px] items-center justify-center rounded"
+    ? "flex min-h-[44px] items-center justify-center rounded-md"
     : nested
-      ? "flex min-h-[44px] items-center gap-2.5 rounded px-2.5 py-1 text-sm lg:min-h-[28px]"
-      : "flex min-h-[44px] items-center gap-2.5 rounded px-2.5 py-1 text-sm lg:min-h-[30px]";
+      ? "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-1 text-[0.88rem] font-semibold lg:min-h-[38px]"
+      : "flex min-h-[44px] items-center gap-3 rounded-md px-3 py-1 text-[0.92rem] font-semibold lg:min-h-[42px]";
 
   if (page.locked) {
     return (
@@ -140,12 +140,12 @@ function NavRow({
       className={({ isActive }: { isActive: boolean }) =>
         `${base} transition-colors ${
           isActive
-            ? "bg-accent-soft font-semibold text-accent-line shadow-[inset_2px_0_0_var(--accent)]"
-            : "text-ink-dim hover:bg-panel-3 hover:text-ink"
+            ? "bg-accent-soft font-extrabold text-accent [&>svg]:text-accent"
+            : "text-ink-dim hover:bg-panel-2 [&>svg]:text-ink-faint"
         }`
       }
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-5 w-5 shrink-0" />
       {!collapsed && <span className="min-w-0 flex-1 truncate">{page.label}</span>}
     </NavLink>
   );
@@ -206,7 +206,7 @@ function NavigationContent({
               onChange={(event) => onQueryChange(event.target.value)}
               placeholder={t("shell.filterNavigation")}
               autoComplete="off"
-              className="min-h-[44px] w-full rounded border border-line-strong bg-panel px-3 pr-9 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-hidden focus:ring-2 focus:border-accent lg:min-h-[28px]"
+              className="min-h-[44px] w-full rounded-full border border-line-strong bg-panel px-4 pr-10 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-hidden focus:ring-2 focus:border-accent lg:min-h-[40px]"
             />
             {query && (
               <button
@@ -225,21 +225,21 @@ function NavigationContent({
         </div>
       )}
 
-      <nav aria-label={t("shell.primaryNavigation")} className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <nav aria-label={t("shell.primaryNavigation")} className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-4">
         {filteredGroups.length > 0 ? (
-          <div className={collapsed ? "space-y-2" : "space-y-3"}>
+          <div className={collapsed ? "space-y-2" : "space-y-4"}>
             {filteredGroups.map((group) => (
               <section key={group.key} aria-labelledby={`${filterId}-${group.key}`}>
                 {!collapsed && (
                   <h2
                     id={`${filterId}-${group.key}`}
-                    className="px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint"
+                    className="px-3 pb-1 text-[0.78rem] font-bold text-ink-faint"
                     title={group.description}
                   >
                     {group.label}
                   </h2>
                 )}
-                <div className="mt-1 space-y-0.5">
+                <div className="space-y-0.5">
                   {group.nodes.map((node) => {
                     if (node.type === "page") {
                       return (
@@ -274,16 +274,16 @@ function NavigationContent({
                           }}
                           className={
                             collapsed
-                              ? "flex min-h-[44px] w-full items-center justify-center rounded text-ink-dim hover:bg-panel-3 hover:text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
-                              : "flex min-h-[44px] w-full items-center justify-between rounded px-2.5 py-1 text-left text-sm font-medium text-ink hover:bg-panel-3 lg:min-h-[30px]"
+                              ? "flex min-h-[44px] w-full items-center justify-center rounded-md text-ink-dim hover:bg-panel-2 hover:text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+                              : "flex min-h-[44px] w-full items-center justify-between rounded-md px-3 py-1 text-left text-[0.92rem] font-semibold text-ink-dim hover:bg-panel-2 lg:min-h-[42px]"
                           }
                         >
                           {collapsed ? (
-                            <ModuleIcon className="h-4 w-4 shrink-0" />
+                            <ModuleIcon className="h-5 w-5 shrink-0" />
                           ) : (
                             <>
-                              <span className="flex min-w-0 items-center gap-2">
-                                <ModuleIcon className="h-4 w-4 shrink-0 text-ink-faint" />
+                              <span className="flex min-w-0 items-center gap-3">
+                                <ModuleIcon className="h-5 w-5 shrink-0 text-ink-faint" />
                                 <span className="truncate">{node.label}</span>
                               </span>
                               <svg
@@ -309,7 +309,7 @@ function NavigationContent({
                           role="region"
                           aria-labelledby={triggerId}
                           hidden={collapsed || !isExpanded}
-                          className="ml-4 space-y-0.5 border-l border-line pl-2"
+                          className="ml-5 space-y-0.5 border-l border-line pl-2"
                         >
                           {node.pages.map((page) => (
                             <NavRow
@@ -330,7 +330,7 @@ function NavigationContent({
           </div>
         ) : (
           <div
-            className="mx-1 rounded border border-dashed border-line-strong bg-panel-2 px-3 py-4 text-sm text-ink-dim"
+            className="mx-1 rounded-lg bg-panel-2 px-3 py-4 text-sm text-ink-dim"
             role="status"
           >
             No visible areas match “{query.trim()}”.
@@ -646,18 +646,18 @@ export function AppShell() {
       {/* Persistent desktop navigation. */}
       <aside
         className={`sticky top-0 hidden h-screen shrink-0 border-r border-line bg-panel lg:flex lg:flex-col ${
-          sidebarCollapsed ? "w-14" : "w-60"
+          sidebarCollapsed ? "w-16" : "w-[264px]"
         }`}
       >
         <div
-          className={`flex items-center border-b border-line ${
-            sidebarCollapsed ? "justify-center px-2 py-3" : "justify-between px-3 py-3"
+          className={`flex items-center ${
+            sidebarCollapsed ? "justify-center px-2 py-4" : "justify-between px-5 pb-4 pt-[18px]"
           }`}
         >
           {sidebarCollapsed ? (
             <>
               <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-accent text-sm font-bold text-accent-on"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-extrabold text-accent-on"
                 title={workspaceTitle}
               >
                 {workspaceTitle.charAt(0).toUpperCase()}
@@ -686,10 +686,10 @@ export function AppShell() {
           ) : (
             <>
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-ink" title={workspaceTitle}>
+                <div className="truncate text-base font-extrabold tracking-[-0.01em] text-ink" title={workspaceTitle}>
                   {workspaceTitle}
                 </div>
-                <div className="mt-1 text-xs text-ink-dim">{currentScopeSummary}</div>
+                <div className="text-[0.78rem] font-medium text-ink-faint">{currentScopeSummary}</div>
               </div>
               <button
                 type="button"
@@ -724,7 +724,7 @@ export function AppShell() {
           onExpand={() => setSidebarCollapsed(false)}
           filterId="desktop-navigation-filter"
         />
-        <div className="border-t border-line p-3">
+        <div className="border-t border-line p-3.5">
           <UserMenu
             fullName={session?.fullName}
             email={session?.email}
@@ -805,7 +805,7 @@ export function AppShell() {
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-20">
-          <header className="flex min-h-[48px] items-center justify-between gap-3 border-b border-line bg-panel px-3 sm:px-4">
+          <header className="flex min-h-[64px] items-center justify-between gap-3 border-b border-line bg-ground px-4 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 ref={menuTriggerRef}
@@ -814,7 +814,7 @@ export function AppShell() {
                 aria-controls="mobile-navigation"
                 aria-label={t("shell.openNavigation")}
                 onClick={() => setMobileNavOpen(true)}
-                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded border border-line-strong bg-panel text-sm font-medium text-ink-dim hover:bg-panel-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border border-line-strong bg-panel px-4 text-sm font-bold text-ink hover:bg-panel-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
               >
                 {t("shell.menu")}
               </button>
@@ -823,10 +823,10 @@ export function AppShell() {
                 <div className="truncate text-xs text-ink-dim">{currentScopeSummary}</div>
               </div>
               <div className="hidden min-w-0 lg:block">
-                <div className="truncate text-sm font-medium text-ink-dim" title={workspaceTitle}>
+                <div className="truncate text-[0.95rem] font-bold text-ink" title={workspaceTitle}>
                   {workspaceTitle}
                 </div>
-                <div className="text-xs text-ink-dim">{currentScopeSummary}</div>
+                <div className="text-[0.78rem] text-ink-faint">{currentScopeSummary}</div>
               </div>
             </div>
             <div className="hidden min-w-0 items-center gap-3 lg:flex">
@@ -860,7 +860,7 @@ export function AppShell() {
           )}
         </div>
 
-        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 p-3 focus:outline-hidden sm:p-4 lg:p-5">
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-4 pb-14 pt-5 focus:outline-hidden sm:px-6">
           <div className="mx-auto w-full max-w-[1600px]">
             {loading ? (
               <Spinner label={t("shell.loadingWorkspace")} />

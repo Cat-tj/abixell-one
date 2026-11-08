@@ -317,7 +317,7 @@ export function AssetDetailPage() {
 
         {!isTerminal && !pendingMovement ? (
           <>
-            <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("ast.detail.t.moveThisAsset")}</h3>
+            <h3 className="mb-2 mt-4 text-xs font-bold text-slate-500">{t("ast.detail.t.moveThisAsset")}</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field label={t("ast.detail.f.responsibleUnit")}>
                 <Select value={moveUnit} onChange={(e) => setMoveUnit(e.target.value)}>
@@ -407,7 +407,7 @@ export function AssetDetailPage() {
               </Button>
             </div>
 
-            <h3 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("ast.detail.t.changeStatus")}</h3>
+            <h3 className="mb-2 mt-6 text-xs font-bold text-slate-500">{t("ast.detail.t.changeStatus")}</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field label={t("ast.detail.f.newStatus")}>
                 <Select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>

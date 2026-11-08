@@ -555,7 +555,7 @@ export function ProjectDeliveryAdvancedCostEVPage() {
               Record
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </Card>
@@ -578,7 +578,7 @@ export function ProjectDeliveryAdvancedCostEVPage() {
               Record
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </Card>

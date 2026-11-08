@@ -268,7 +268,7 @@ export function PublicSurveyPage() {
         {/* Header card with branding & locale selector */}
         <div className="flex items-center justify-between border-b border-line pb-4">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+            <div className="text-xs font-semiboldr text-ink-faint">
               {t("surveyPublic.eyebrow")}
             </div>
             <h1 className="text-2xl font-bold text-ink">{surveyView.definitionName}</h1>

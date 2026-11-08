@@ -119,13 +119,13 @@ export function RoleDashboard() {
                 to={card.to}
                 className="group flex min-h-[84px] flex-col justify-between gap-1 rounded border border-line bg-panel p-3 transition-colors hover:border-line-strong hover:bg-panel-2"
               >
-                <span className="text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">{card.label}</span>
+                <span className="text-[0.84rem] font-bold text-ink-faint">{card.label}</span>
                 <span className="text-2xl font-semibold tabular-nums text-ink">{card.value}</span>
                 {card.hint && <span className="text-xs text-ink-faint">{card.hint}</span>}
               </Link>
             ) : (
               <div key={card.key} className="flex min-h-[84px] flex-col justify-between gap-1 rounded border border-line bg-panel p-3">
-                <span className="text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">{card.label}</span>
+                <span className="text-[0.84rem] font-bold text-ink-faint">{card.label}</span>
                 <span className="text-2xl font-semibold tabular-nums text-ink">{card.value}</span>
                 {card.hint && <span className="text-xs text-ink-faint">{card.hint}</span>}
               </div>

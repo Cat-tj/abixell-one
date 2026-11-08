@@ -161,7 +161,7 @@ export function ItemsPage() {
                 setName("");
               }}
             >
-              Create
+              {t("common.create")}
             </Button>
           </div>
         </div>

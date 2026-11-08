@@ -489,7 +489,7 @@ export function ReportingInsightPage() {
                             key={`${module.moduleCode}-${card.label}`}
                             className="rounded border border-slate-100 bg-slate-50 p-3"
                           >
-                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                            <p className="text-xs font-bold text-slate-500">
                               {card.label}
                             </p>
                             <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
@@ -539,7 +539,7 @@ export function ReportingInsightPage() {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       {Object.entries(result.summary).map(([key, value]) => (
                         <Card key={key}>
-                          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                          <p className="text-xs font-bold text-slate-500">
                             {humanize(key)}
                           </p>
                           <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">
@@ -702,7 +702,7 @@ export function ReportingInsightPage() {
                     <div className="space-y-4">
                       {/* Dimensions Selection */}
                       <div>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        <span className="text-xs font-semiboldr text-slate-500">
                           Group By Dimensions
                         </span>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -736,7 +736,7 @@ export function ReportingInsightPage() {
 
                       {/* Measures Selection */}
                       <div>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        <span className="text-xs font-semiboldr text-slate-500">
                           Aggregated Measures
                         </span>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -771,7 +771,7 @@ export function ReportingInsightPage() {
                       {/* Filter Builder */}
                       <div>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          <span className="text-xs font-semiboldr text-slate-500">
                             Data Filters
                           </span>
                           <button
@@ -1012,7 +1012,7 @@ export function ReportingInsightPage() {
                   {forecastResponse.forecast.metrics && (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <Card>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <p className="text-xs font-bold text-slate-500">
                           Historical Daily Average
                         </p>
                         <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
@@ -1020,7 +1020,7 @@ export function ReportingInsightPage() {
                         </p>
                       </Card>
                       <Card>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <p className="text-xs font-bold text-slate-500">
                           Trend Slope / Day
                         </p>
                         <p
@@ -1037,7 +1037,7 @@ export function ReportingInsightPage() {
                         </p>
                       </Card>
                       <Card>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <p className="text-xs font-bold text-slate-500">
                           Projected Next Period Total
                         </p>
                         <p className="mt-1 text-2xl font-bold tabular-nums text-blue-600">

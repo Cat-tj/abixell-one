@@ -227,7 +227,7 @@ export function AssetMaintenanceWorkOrderDetailPage() {
 
             {availableActions.length > 0 ? (
               <div className="mt-4 border-t border-slate-100 pt-4">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("sca.maint.t.workflowActions")}</h3>
+                <h3 className="mb-2 text-xs font-bold text-slate-500">{t("sca.maint.t.workflowActions")}</h3>
                 <Field label={t("sca.maint.f.workflowComment")}>
                   <Input value={workflowComment} onChange={(e) => setWorkflowComment(e.target.value)} placeholder={t("sca.maint.p.optionalComment")} />
                 </Field>
