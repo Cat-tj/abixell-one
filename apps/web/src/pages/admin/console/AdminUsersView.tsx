@@ -121,7 +121,7 @@ export function AdminUsersView({
   const [terminatingId, setTerminatingId] = useState<string | null>(null);
 
   const terminateUser = useCallback(
-    async (user: AdminUserAccessSummary, triggerEl: HTMLElement) => {
+    async (user: AdminUserAccessSummary) => {
       if (!window.confirm(t("adminUsers.terminateConfirm", { name: user.fullName }))) return;
       setTerminatingId(user.id);
       try {
@@ -356,7 +356,8 @@ export function AdminUsersView({
                         className="min-h-[44px] text-status-danger"
                         aria-label={t("adminUsers.terminate")}
                         title={t("adminUsers.terminate")}
-                        onClick={(event) => void terminateUser(user, event.currentTarget)}
+                        disabled={terminatingId === user.id}
+                        onClick={() => void terminateUser(user)}
                       >
                         <UserX size={16} aria-hidden="true" />
                       </Button>

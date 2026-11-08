@@ -105,8 +105,8 @@ function NavRow({
   const base = collapsed
     ? "flex min-h-[44px] items-center justify-center rounded"
     : nested
-      ? "flex min-h-[44px] items-center gap-2.5 rounded px-2.5 py-1.5 text-sm lg:min-h-[32px]"
-      : "flex min-h-[44px] items-center gap-2.5 rounded px-3 py-2 text-sm lg:min-h-[36px]";
+      ? "flex min-h-[44px] items-center gap-2.5 rounded px-2.5 py-1 text-sm lg:min-h-[28px]"
+      : "flex min-h-[44px] items-center gap-2.5 rounded px-2.5 py-1 text-sm lg:min-h-[30px]";
 
   if (page.locked) {
     return (
@@ -138,9 +138,9 @@ function NavRow({
       onClick={onNavigate}
       title={collapsed ? page.label : undefined}
       className={({ isActive }: { isActive: boolean }) =>
-        `${base} transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
+        `${base} transition-colors ${
           isActive
-            ? "bg-accent font-medium text-accent-on shadow-xs"
+            ? "bg-accent-soft font-semibold text-accent-line shadow-[inset_2px_0_0_var(--accent)]"
             : "text-ink-dim hover:bg-panel-3 hover:text-ink"
         }`
       }
@@ -206,7 +206,7 @@ function NavigationContent({
               onChange={(event) => onQueryChange(event.target.value)}
               placeholder={t("shell.filterNavigation")}
               autoComplete="off"
-              className="min-h-[44px] w-full rounded border border-line-strong bg-panel px-3 pr-9 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-hidden focus:ring-2 focus:ring-2 focus:ring-accent-soft lg:min-h-[36px]"
+              className="min-h-[44px] w-full rounded border border-line-strong bg-panel px-3 pr-9 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-hidden focus:ring-2 focus:border-accent lg:min-h-[28px]"
             />
             {query && (
               <button
@@ -227,19 +227,19 @@ function NavigationContent({
 
       <nav aria-label={t("shell.primaryNavigation")} className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {filteredGroups.length > 0 ? (
-          <div className={collapsed ? "space-y-3" : "space-y-5"}>
+          <div className={collapsed ? "space-y-2" : "space-y-3"}>
             {filteredGroups.map((group) => (
               <section key={group.key} aria-labelledby={`${filterId}-${group.key}`}>
                 {!collapsed && (
                   <h2
                     id={`${filterId}-${group.key}`}
-                    className="px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint"
+                    className="px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint"
                     title={group.description}
                   >
                     {group.label}
                   </h2>
                 )}
-                <div className="mt-1 space-y-1">
+                <div className="mt-1 space-y-0.5">
                   {group.nodes.map((node) => {
                     if (node.type === "page") {
                       return (
@@ -275,7 +275,7 @@ function NavigationContent({
                           className={
                             collapsed
                               ? "flex min-h-[44px] w-full items-center justify-center rounded text-ink-dim hover:bg-panel-3 hover:text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
-                              : "flex min-h-[44px] w-full items-center justify-between rounded px-3 py-2 text-left text-sm font-medium text-ink-dim hover:bg-panel-3 hover:text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 lg:min-h-[36px]"
+                              : "flex min-h-[44px] w-full items-center justify-between rounded px-2.5 py-1 text-left text-sm font-medium text-ink hover:bg-panel-3 lg:min-h-[30px]"
                           }
                         >
                           {collapsed ? (
@@ -646,18 +646,18 @@ export function AppShell() {
       {/* Persistent desktop navigation. */}
       <aside
         className={`sticky top-0 hidden h-screen shrink-0 border-r border-line bg-panel lg:flex lg:flex-col ${
-          sidebarCollapsed ? "w-16" : "w-72"
+          sidebarCollapsed ? "w-14" : "w-60"
         }`}
       >
         <div
           className={`flex items-center border-b border-line ${
-            sidebarCollapsed ? "justify-center px-2 py-3" : "justify-between px-4 py-4"
+            sidebarCollapsed ? "justify-center px-2 py-3" : "justify-between px-3 py-3"
           }`}
         >
           {sidebarCollapsed ? (
             <>
               <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-bold text-accent-on"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-accent text-sm font-bold text-accent-on"
                 title={workspaceTitle}
               >
                 {workspaceTitle.charAt(0).toUpperCase()}
@@ -805,7 +805,7 @@ export function AppShell() {
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-20">
-          <header className="flex min-h-[60px] items-center justify-between gap-3 border-b border-line bg-panel/95 px-4 backdrop-blur-sm sm:px-6">
+          <header className="flex min-h-[48px] items-center justify-between gap-3 border-b border-line bg-panel px-3 sm:px-4">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 ref={menuTriggerRef}
@@ -860,7 +860,7 @@ export function AppShell() {
           )}
         </div>
 
-        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 p-4 focus:outline-hidden sm:p-6">
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 p-3 focus:outline-hidden sm:p-4 lg:p-5">
           <div className="mx-auto w-full max-w-[1600px]">
             {loading ? (
               <Spinner label={t("shell.loadingWorkspace")} />

@@ -23,6 +23,7 @@ import type {
   ServiceDefinitionChecklistItem,
   ServiceOperationsRepository,
   WorkOrder,
+  WorkOrderType,
   WorkOrderAcceptanceToken,
   WorkOrderChecklistItem,
   WorkOrderCostItem,
@@ -267,7 +268,7 @@ export class ServiceOperationsService {
 
   async listWorkRequests(actor: ActorContext): Promise<{ request: WorkRequest; state: string }[]> {
     await this.rbac.requirePermission(actor, "service_operations.read");
-    const customerIds = await this.customers.listScopedCustomerIds(actor);
+    const customerIds = await this.customers.listScopedCustomerIdsForActor(actor);
     const requests = await this.repo.listWorkRequests(actor.tenantId, { customerIds });
     const customer = this.isCustomerActor(actor);
     return requests.map((request) => ({
@@ -352,6 +353,7 @@ export class ServiceOperationsService {
     input: {
       customerId: string;
       contractId?: string | null;
+      woType?: WorkOrderType;
       projectId?: string | null;
       siteId?: string | null;
       serviceDefinitionCode: string;
@@ -364,6 +366,12 @@ export class ServiceOperationsService {
     },
   ): Promise<WorkOrder> {
     await this.rbac.requirePermission(actor, "service_operations.manage");
+    const woType: WorkOrderType = input.woType ?? "regular";
+    // A back-charge WO is work done without a delivery contract, so it
+    // must not reference one and never enters contract-price resolution.
+    if (woType === "back_charge" && input.contractId) {
+      throw new ValidationError("A back_charge Work Order cannot reference a contract");
+    }
     // Owner request: WO isolation decided at creation. A project-bound WO
     // requires the creator to be an explicit project member.
     if (input.projectId && !(await this.repo.isProjectMember(actor.tenantId, input.projectId, actor.userId))) {
@@ -374,7 +382,8 @@ export class ServiceOperationsService {
     return this.createWorkOrderInternal(actor, {
       workRequestId: null,
       customerId: customer.id,
-      contractId: input.contractId ?? null,
+      contractId: woType === "back_charge" ? null : (input.contractId ?? null),
+      woType,
       projectId: input.projectId ?? null,
       siteId: input.siteId ?? null,
       definition,
@@ -879,7 +888,7 @@ export class ServiceOperationsService {
   async listCostItems(actor: ActorContext, workOrderId: string): Promise<WorkOrderCostItem[]> {
     await this.rbac.requirePermission(actor, "service_operations.read");
     this.requireInternalActor(actor);
-    const workOrder = await this.getAuthorizedWorkOrder(actor, workOrderId);
+    const workOrder = await this.getAuthorizedWorkOrderForRead(actor, workOrderId);
     return this.repo.listCostItems(actor.tenantId, workOrder.id);
   }
 
@@ -1135,7 +1144,7 @@ export class ServiceOperationsService {
   /** Read-tier invoice lookup for a Work Order (404 when not yet invoiced). */
   async getInvoice(actor: ActorContext, workOrderId: string): Promise<CustomerInvoice> {
     await this.rbac.requirePermission(actor, "service_operations.read");
-    const workOrder = await this.getAuthorizedWorkOrder(actor, workOrderId);
+    const workOrder = await this.getAuthorizedWorkOrderForRead(actor, workOrderId);
     const invoice = await this.repo.findInvoiceByWorkOrder(actor.tenantId, workOrder.id);
     if (!invoice) {
       throw new NotFoundError("Invoice", workOrder.id);
@@ -1260,7 +1269,7 @@ export class ServiceOperationsService {
   async getServingLog(actor: ActorContext, workOrderId: string): Promise<WorkOrderServingLog> {
     await this.rbac.requirePermission(actor, "service_operations.read");
     this.requireInternalActor(actor);
-    const workOrder = await this.getAuthorizedWorkOrder(actor, workOrderId);
+    const workOrder = await this.getAuthorizedWorkOrderForRead(actor, workOrderId);
     const servingLog = await this.repo.findServingLogByWorkOrder(workOrder.id);
     if (!servingLog) {
       throw new NotFoundError("ServingLog", workOrderId);
@@ -1416,16 +1425,46 @@ export class ServiceOperationsService {
     filter: { siteId?: string; status?: "open" | "completed" } = {},
   ): Promise<{ workOrder: WorkOrder; status: EntityWorkflowStatus | null }[]> {
     await this.rbac.requirePermission(actor, "service_operations.read");
-    const customerIds = await this.customers.listScopedCustomerIds(actor);
-    const all = await this.repo.listWorkOrders(actor.tenantId, { customerIds, siteId: filter.siteId });
+    const customerIds = await this.customers.listScopedCustomerIdsForActor(actor);
+    const tenantWide = actor.scopeType === "tenant";
+    // Same visibility rule as the detail read (`isWorkOrderVisible`): assigned
+    // to the actor, OR Customer Data Scope covers the customer, OR the actor is
+    // associated with the Work Order's Workflow Instance. The association is
+    // computed once for the whole list (two queries), not per row.
+    const associated = tenantWide
+      ? new Set<string>()
+      : await this.workflow.listAssociatedInstanceIds(actor);
+    const coveredCustomers = new Set(customerIds);
+    const all = await this.repo.listWorkOrders(actor.tenantId, {
+      siteId: filter.siteId,
+      visibleTo: {
+        customerIds,
+        assignedToUserId: actor.userId,
+        workflowInstanceIds: [...associated],
+      },
+    });
+    const probes: WorkOrderVisibilityProbes = {
+      customerCovered: async (customerId) => coveredCustomers.has(customerId),
+      associated: async (instanceId) => associated.has(instanceId),
+    };
+    const visible: WorkOrder[] = [];
+    for (const row of all) {
+      if (await this.isWorkOrderVisible(actor, row, probes)) visible.push(row);
+    }
     // Owner request: WO isolation. Tenant-wide readers (admins) see
     // everything; org/customer-scoped actors see WOs without a project, plus
-    // WOs of projects they are an explicit member of.
-    let orders = all;
-    if (actor.scopeType !== "tenant") {
+    // WOs of projects they are an explicit member of. A Work Order routed to
+    // the actor (assigned executor, or workflow-associated) is exempt: they
+    // were explicitly given it and detail already shows it to them.
+    let orders = visible;
+    if (!tenantWide) {
       const memberOf = await this.repo.listUserProjectIds(actor.tenantId, actor.userId);
-      orders = all.filter(
-        (row) => row.projectId == null || memberOf.has(row.projectId),
+      orders = visible.filter(
+        (row) =>
+          row.projectId == null ||
+          memberOf.has(row.projectId) ||
+          row.assignedToUserId === actor.userId ||
+          (row.workflowInstanceId != null && associated.has(row.workflowInstanceId)),
       );
     }
     const rows = await this.withStatus(actor, orders);
@@ -1445,7 +1484,10 @@ export class ServiceOperationsService {
 
   async getWorkOrderDetail(actor: ActorContext, id: string): Promise<WorkOrderDetailView> {
     await this.rbac.requirePermission(actor, "service_operations.read");
-    const workOrder = await this.getAuthorizedWorkOrder(actor, id);
+    // Site-scoping: a Work Order outside the actor's Data Scope is
+    // indistinguishable from a missing one on the READ path (404, no
+    // existence disclosure). Mutations keep the 403 of getAuthorizedWorkOrder.
+    const workOrder = await this.getAuthorizedWorkOrderForRead(actor, id);
     const [serviceDefinition, checklist] = await Promise.all([
       this.repo.findServiceDefinitionById(workOrder.serviceDefinitionId),
       this.repo.listWorkOrderChecklistItems(workOrder.id),
@@ -1488,6 +1530,7 @@ export class ServiceOperationsService {
       workRequestId: string | null;
       customerId: string;
       contractId: string | null;
+      woType?: WorkOrderType;
       projectId: string | null;
       siteId: string | null;
       definition: ServiceDefinition;
@@ -1512,6 +1555,7 @@ export class ServiceOperationsService {
       workRequestId: input.workRequestId,
       customerId: customer.id,
       contractId: input.contractId,
+      woType: input.woType ?? "regular",
       projectId: input.projectId,
       siteId: input.siteId,
       serviceDefinitionId: input.definition.id,
@@ -1681,16 +1725,36 @@ export class ServiceOperationsService {
     return workOrder;
   }
 
+  /** READ-path variant: an out-of-scope Work Order is indistinguishable from a
+   * missing one (404, no existence disclosure) - detail, cost items, invoice,
+   * serving log. Mutations keep `getAuthorizedWorkOrder`'s 403 (the caller
+   * already holds the capability; the refusal is about scope, not existence). */
+  private async getAuthorizedWorkOrderForRead(actor: ActorContext, id: string): Promise<WorkOrder> {
+    return this.getAuthorizedWorkOrder(actor, id).catch((error: unknown) => {
+      if (error instanceof ForbiddenError) throw new NotFoundError("WorkOrder", id);
+      throw error;
+    });
+  }
+
   private async isAuthorizedForWorkOrder(actor: ActorContext, workOrder: WorkOrder): Promise<boolean> {
+    return this.isWorkOrderVisible(actor, workOrder, {
+      customerCovered: (customerId) => this.customers.canAccessForDocument(actor, customerId),
+      associated: (instanceId) => this.workflow.isActorAssociatedWithInstance(actor, instanceId),
+    });
+  }
+
+  /** THE Work Order visibility rule, shared by the detail/sub-resource gate
+   * (live probes) and the list/dashboard (set-backed probes) so they cannot
+   * drift: assigned executor, OR Customer Data Scope covers the customer, OR
+   * associated with the Work Order's Workflow Instance. */
+  private async isWorkOrderVisible(
+    actor: ActorContext,
+    workOrder: WorkOrder,
+    probes: WorkOrderVisibilityProbes,
+  ): Promise<boolean> {
     if (workOrder.assignedToUserId === actor.userId) return true;
-    if (await this.customers.canAccessForDocument(actor, workOrder.customerId)) return true;
-    if (
-      workOrder.workflowInstanceId &&
-      (await this.workflow.isActorAssociatedWithInstance(actor, workOrder.workflowInstanceId))
-    ) {
-      return true;
-    }
-    return false;
+    if (await probes.customerCovered(workOrder.customerId)) return true;
+    return !!workOrder.workflowInstanceId && (await probes.associated(workOrder.workflowInstanceId));
   }
 
   /** Only the assigned executor may record execution facts. A Work Order
@@ -1701,6 +1765,11 @@ export class ServiceOperationsService {
       throw new ForbiddenError("This Work Order is assigned to another executor");
     }
   }
+}
+
+interface WorkOrderVisibilityProbes {
+  customerCovered(customerId: string): Promise<boolean>;
+  associated(instanceId: string): Promise<boolean>;
 }
 
 /** Workflow status carries the pending Assignment's staff id — null it for a

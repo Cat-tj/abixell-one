@@ -237,6 +237,54 @@ describe("WP-FIN-A6-03 — Budget control", () => {
   // Version lifecycle (Workflow maker-checker)
   // -------------------------------------------------------------------------
 
+  it("stamps the Legal Entity, and the cost center's Organization Unit, on the approval Instance", async () => {
+    const configure = await actorWith(["finance.accounting.configure"]);
+    const unit = await pool.query(
+      `INSERT INTO organization_units (tenant_id, legal_entity_id, name, unit_type)
+       VALUES ($1, $2, 'Budget Site', 'Internal Site') RETURNING id`,
+      [tenantId, legalEntityId],
+    );
+    const cc = await pool.query(
+      `INSERT INTO finance_cost_centers (tenant_id, code, name, org_unit_id, effective_from)
+       VALUES ($1, $2, 'CC placed', $3, '2026-01-01') RETURNING id`,
+      [tenantId, `CC-${TS}`.slice(0, 40), unit.rows[0].id],
+    );
+    const placed = await service.createBudget(configure, {
+      legalEntityId,
+      fiscalYearCode: "2027",
+      scenario: "original",
+      currency: "IDR",
+      name: "Placed budget",
+      scope: { ...nextScope(), costCenterId: cc.rows[0].id },
+    });
+    const v = await service.createDraftVersion(configure, placed.id, {
+      totalAmount: "100.0000",
+      weights: [{ periodCode: "2027-01", weight: "1" }],
+    });
+    const ctx = async (id: string | null) =>
+      (await pool.query(`SELECT context_data FROM workflow_instances WHERE id = $1`, [id])).rows[0].context_data;
+    expect(await ctx(v.workflowInstanceId)).toMatchObject({
+      legalEntityId,
+      organizationUnitId: unit.rows[0].id,
+    });
+
+    const unplaced = await service.createBudget(configure, {
+      legalEntityId,
+      fiscalYearCode: "2027",
+      scenario: "original",
+      currency: "IDR",
+      name: "Unplaced budget",
+      scope: nextScope(),
+    });
+    const v2 = await service.createDraftVersion(configure, unplaced.id, {
+      totalAmount: "100.0000",
+      weights: [{ periodCode: "2027-01", weight: "1" }],
+    });
+    const ctx2 = await ctx(v2.workflowInstanceId);
+    expect(ctx2.legalEntityId).toBe(legalEntityId);
+    expect(ctx2.organizationUnitId ?? null).toBeNull();
+  });
+
   it("activates a version only through the Workflow approval and supersedes the prior baseline", async () => {
     const configure = await actorWith(["finance.accounting.configure"]);
     const budget = await service.createBudget(configure, {

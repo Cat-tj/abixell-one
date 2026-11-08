@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 import { ConflictError, NotFoundError, ValidationError } from "../../../../domain/shared-kernel/errors.js";
+import { assertGradeCompatible } from "../domain/grade-policy.js";
 import { fromExactUnits, multiplyQuantityCost, toExactUnits } from "../domain/valuation-policy.js";
 import type {
+  ScmGrade,
   ApplyScmLandedCostInput,
   AwardScmSupplierBidInput,
   ConsumeScmValuationLayerInput,
@@ -211,8 +213,8 @@ export class PgSupplyChainAdvancedRepository implements SupplyChainAdvancedRepos
   async createWarehouse(tenantId: string, input: CreateScmWarehouseInput): Promise<ScmWarehouse> {
     const r = await this.pool.query(
       `INSERT INTO scm_warehouses (
-         tenant_id, code, name, site_id, organization_unit_id, address, is_active, created_by, updated_by
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+         tenant_id, code, name, site_id, organization_unit_id, address, is_active, created_by, updated_by, grade
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
        RETURNING *`,
       [
         tenantId,
@@ -223,6 +225,7 @@ export class PgSupplyChainAdvancedRepository implements SupplyChainAdvancedRepos
         input.address ?? null,
         input.isActive ?? true,
         input.createdBy ?? null,
+        input.grade ?? null,
       ],
     );
     return toWarehouse(r.rows[0]!);
@@ -232,8 +235,34 @@ export class PgSupplyChainAdvancedRepository implements SupplyChainAdvancedRepos
     tenantId: string,
     warehouseId: string,
     input: UpdateScmWarehouseInput,
+    guard?: (current: ScmWarehouse, heldItemGrades: ScmGrade[]) => void,
   ): Promise<ScmWarehouse | null> {
-    const r = await this.pool.query(
+    if (guard && input.grade !== undefined) {
+      // Lock the warehouse row, check held stock and update atomically. Movements
+      // take FOR SHARE on this row (queryGradeContext), so they serialise with us.
+      return this.inTransaction(async (client) => {
+        const cur = await client.query(
+          `SELECT * FROM scm_warehouses WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+          [tenantId, warehouseId],
+        );
+        if (!cur.rows[0]) return null;
+        const current = toWarehouse(cur.rows[0]);
+        if (input.grade !== current.grade) {
+          guard(current, await this.queryHeldItemGrades(client, tenantId, warehouseId));
+        }
+        return this.updateWarehouseRow(client, tenantId, warehouseId, input);
+      });
+    }
+    return this.updateWarehouseRow(this.pool, tenantId, warehouseId, input);
+  }
+
+  private async updateWarehouseRow(
+    db: Pick<Pool, "query">,
+    tenantId: string,
+    warehouseId: string,
+    input: UpdateScmWarehouseInput,
+  ): Promise<ScmWarehouse | null> {
+    const r = await db.query(
       `UPDATE scm_warehouses
           SET name = COALESCE($3, name),
               site_id = CASE WHEN $4::boolean THEN $5 ELSE site_id END,
@@ -241,6 +270,7 @@ export class PgSupplyChainAdvancedRepository implements SupplyChainAdvancedRepos
               address = CASE WHEN $8::boolean THEN $9 ELSE address END,
               is_active = COALESCE($10, is_active),
               updated_by = $11,
+              grade = CASE WHEN $12::boolean THEN $13 ELSE grade END,
               updated_at = now()
         WHERE tenant_id = $1 AND id = $2
         RETURNING *`,
@@ -256,6 +286,8 @@ export class PgSupplyChainAdvancedRepository implements SupplyChainAdvancedRepos
         input.address ?? null,
         input.isActive ?? null,
         input.updatedBy ?? null,
+        input.grade !== undefined,
+        input.grade ?? null,
       ],
     );
     return r.rows[0] ? toWarehouse(r.rows[0]) : null;
@@ -669,6 +701,12 @@ export class PgSupplyChainAdvancedRepository implements SupplyChainAdvancedRepos
     input: RecordScmAdvancedStockMovementInput,
   ): Promise<{ movement: ScmAdvancedStockMovement; balance: ScmAdvancedStockBalance }> {
     {
+      // Food-grade separation: every ledger write (receipt, issue, transfer
+      // legs, adjustment, opname, disposal, ...) funnels through here, so this
+      // is the one place the rule cannot be bypassed. NULL grade = unrestricted.
+      const gradeCtx = await this.queryGradeContext(client, tenantId, input.itemId, input.warehouseId, true);
+      if (gradeCtx) assertGradeCompatible(gradeCtx);
+
       const stockCondition = input.stockCondition ?? "unrestricted";
       const ownerType = input.ownerType ?? "own";
       const ownerPartyId = input.ownerPartyId ?? null;
@@ -6507,6 +6545,54 @@ export class PgSupplyChainAdvancedRepository implements SupplyChainAdvancedRepos
     return (r.rowCount ?? 0) > 0;
   }
 
+  async findGradeContext(tenantId: string, itemId: string, warehouseId: string) {
+    return this.queryGradeContext(this.pool, tenantId, itemId, warehouseId, false);
+  }
+
+  /** `lock` (inside a movement transaction) takes FOR SHARE on the item and warehouse rows so a
+   * concurrent regrade (FOR UPDATE on the same rows) waits for this movement, or vice versa. */
+  private async queryGradeContext(
+    db: Pick<Pool, "query">,
+    tenantId: string,
+    itemId: string,
+    warehouseId: string,
+    lock: boolean,
+  ) {
+    const r = await db.query(
+      `SELECT i.code AS item_code, i.grade AS item_grade, w.code AS warehouse_code, w.grade AS warehouse_grade
+         FROM items i, scm_warehouses w
+        WHERE i.tenant_id = $1 AND i.id = $2 AND w.tenant_id = $1 AND w.id = $3${lock ? "\n          FOR SHARE OF i, w" : ""}`,
+      [tenantId, itemId, warehouseId],
+    );
+    const row = r.rows[0];
+    if (!row) return null;
+    return {
+      itemCode: row.item_code as string,
+      itemGrade: (row.item_grade ?? null) as ScmGrade | null,
+      warehouseCode: row.warehouse_code as string,
+      warehouseGrade: (row.warehouse_grade ?? null) as ScmGrade | null,
+    };
+  }
+
+  async listHeldItemGrades(tenantId: string, warehouseId: string): Promise<ScmGrade[]> {
+    return this.queryHeldItemGrades(this.pool, tenantId, warehouseId);
+  }
+
+  private async queryHeldItemGrades(
+    db: Pick<Pool, "query">,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<ScmGrade[]> {
+    const r = await db.query(
+      `SELECT DISTINCT i.grade
+         FROM scm_advanced_stock_balances b
+         JOIN items i ON i.id = b.item_id AND i.tenant_id = b.tenant_id
+        WHERE b.tenant_id = $1 AND b.warehouse_id = $2 AND b.quantity > 0 AND i.grade IS NOT NULL`,
+      [tenantId, warehouseId],
+    );
+    return r.rows.map((row) => row.grade as ScmGrade);
+  }
+
   async supplierExists(tenantId: string, supplierId: string): Promise<boolean> {
     const r = await this.pool.query(`SELECT 1 FROM suppliers WHERE tenant_id = $1 AND id = $2`, [tenantId, supplierId]);
     return (r.rowCount ?? 0) > 0;
@@ -6920,6 +7006,7 @@ function toWarehouse(r: QueryResultRow): ScmWarehouse {
     siteId: r.site_id,
     organizationUnitId: r.organization_unit_id,
     address: r.address,
+    grade: r.grade ?? null,
     isActive: r.is_active,
     createdAt: r.created_at,
     createdBy: r.created_by,

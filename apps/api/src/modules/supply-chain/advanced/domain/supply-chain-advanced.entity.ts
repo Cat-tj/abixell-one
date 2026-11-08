@@ -110,6 +110,9 @@ export type ScmSpendAnalyticsPeriodType = "monthly" | "quarterly" | "yearly";
 
 // === 1. Multi-Warehouse, Bin, Batch/Lot & Serial ===========================
 
+/** Food-grade classification (mirrors the CHECK on scm_warehouses.grade / items.grade). */
+export type ScmGrade = "food" | "non_food";
+
 export interface ScmWarehouse {
   id: string;
   tenantId: string;
@@ -118,6 +121,8 @@ export interface ScmWarehouse {
   siteId: string | null;
   organizationUnitId: string | null;
   address: string | null;
+  /** Food-grade classification; null = unrestricted. See grade-policy.ts. */
+  grade: ScmGrade | null;
   isActive: boolean;
   createdAt: Date;
   createdBy: string | null;
@@ -131,6 +136,7 @@ export interface CreateScmWarehouseInput {
   siteId?: string | null;
   organizationUnitId?: string | null;
   address?: string | null;
+  grade?: ScmGrade | null;
   isActive?: boolean;
   createdBy?: string | null;
 }
@@ -140,6 +146,7 @@ export interface UpdateScmWarehouseInput {
   siteId?: string | null;
   organizationUnitId?: string | null;
   address?: string | null;
+  grade?: ScmGrade | null;
   isActive?: boolean;
   updatedBy?: string | null;
 }
@@ -2187,7 +2194,14 @@ export interface ScmWarehouseTaskFilter {
 export interface SupplyChainAdvancedRepository {
   // Warehouses & locations
   createWarehouse(tenantId: string, input: CreateScmWarehouseInput): Promise<ScmWarehouse>;
-  updateWarehouse(tenantId: string, warehouseId: string, input: UpdateScmWarehouseInput): Promise<ScmWarehouse | null>;
+  /** When `guard` is given and the input changes the grade, the repository locks the warehouse row
+   * (FOR UPDATE), runs `guard(lockedWarehouse, heldItemGrades)` and updates in ONE transaction. */
+  updateWarehouse(
+    tenantId: string,
+    warehouseId: string,
+    input: UpdateScmWarehouseInput,
+    guard?: (current: ScmWarehouse, heldItemGrades: ScmGrade[]) => void,
+  ): Promise<ScmWarehouse | null>;
   findWarehouseById(tenantId: string, warehouseId: string): Promise<ScmWarehouse | null>;
   findWarehouseByCode(tenantId: string, code: string): Promise<ScmWarehouse | null>;
   listWarehouses(tenantId: string, filter?: ScmWarehouseListFilter): Promise<ScmWarehouse[]>;
@@ -2753,6 +2767,14 @@ export interface SupplyChainAdvancedRepository {
 
   // Cross-domain reference checks (mirrors Core's pattern)
   itemExists(tenantId: string, itemId: string): Promise<boolean>;
+  /** Grade lookup for the food/non-food separation rule; null when item or warehouse is missing. */
+  findGradeContext(
+    tenantId: string,
+    itemId: string,
+    warehouseId: string,
+  ): Promise<{ itemCode: string; itemGrade: ScmGrade | null; warehouseCode: string; warehouseGrade: ScmGrade | null } | null>;
+  /** Distinct non-null item grades with positive on-hand quantity in the warehouse. */
+  listHeldItemGrades(tenantId: string, warehouseId: string): Promise<ScmGrade[]>;
   supplierExists(tenantId: string, supplierId: string): Promise<boolean>;
   /** WP-PRO-04 eligibility gate: null when the supplier does not exist. */
   findSupplierActive(tenantId: string, supplierId: string): Promise<boolean | null>;

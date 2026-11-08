@@ -108,11 +108,11 @@ export function UserMenu({
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex min-h-[44px] items-center gap-2 rounded border border-line-strong bg-panel px-2 py-1 text-sm hover:bg-panel-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] items-center gap-2 rounded border border-line-strong bg-panel px-2 py-1 text-sm lg:min-h-[32px] hover:bg-panel-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span
           aria-hidden="true"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-on"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-on"
         >
           {initials}
         </span>

@@ -11,6 +11,7 @@ import { useAuth } from "../../auth/AuthContext";
 import {
   api,
   ApiError,
+  type ScmGrade,
   type ScmItem,
   type StockBalanceRecord,
   type StockMovementRecord,
@@ -25,11 +26,13 @@ import {
   Field,
   Input,
   PageHeader,
+  Select,
   Spinner,
   StatusPill,
   type Column,
 } from "../../shell/components/ui";
 import { formatDate } from "../../shared/format";
+import { GradeBadge, GradeOptions, parseGrade } from "../../shared/GradeBadge";
 
 export function ItemsPage() {
   const t = useT();
@@ -49,6 +52,7 @@ export function ItemsPage() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [uom, setUom] = useState("EA");
+  const [grade, setGrade] = useState<ScmGrade | null>(null);
   const [quantity, setQuantity] = useState("");
   const [reference, setReference] = useState("");
 
@@ -111,6 +115,7 @@ export function ItemsPage() {
     { header: t("msc.items.h.code"), cell: (row) => <span className="font-medium">{row.code}</span> },
     { header: t("msc.items.h.name"), cell: (row) => row.name },
     { header: t("msc.items.h.unit"), cell: (row) => row.unitOfMeasure },
+    { header: t("grade.label"), cell: (row) => <GradeBadge grade={row.grade} /> },
     { header: t("msc.items.h.onHand"), cell: (row) => <Badge>{totalFor(row)}</Badge> },
     {
       header: t("msc.items.h.state"),
@@ -139,12 +144,17 @@ export function ItemsPage() {
           <Field label={t("msc.items.f.unitOfMeasure")} required>
             <Input value={uom} onChange={(e) => setUom(e.target.value)} placeholder="EA / KG / L / BOX" />
           </Field>
+          <Field label={t("grade.label")}>
+            <Select value={grade ?? ""} onChange={(e) => setGrade(parseGrade(e.target.value))}>
+              <GradeOptions />
+            </Select>
+          </Field>
           <div className="flex items-end">
             <Button
               disabled={busy || !code || !name || !uom}
               onClick={async () => {
                 await run(
-                  () => api.createScmItem(token, { code, name, unitOfMeasure: uom }),
+                  () => api.createScmItem(token, { code, name, unitOfMeasure: uom, grade }),
                   "Item created.",
                 );
                 setCode("");

@@ -1235,6 +1235,9 @@ export const api = {
       description?: string | null;
       priority?: string | null;
       dueAt?: string | null;
+      /** Back-charge work orders must NOT carry a contractId (API returns 400). */
+      woType?: WorkOrderType;
+      contractId?: string | null;
     },
   ) => request<WorkOrder>("/work-orders", { method: "POST", token, body }),
   assignWorkOrder: (token: string, id: string, assigneeUserId: string) =>
@@ -1497,9 +1500,16 @@ export const api = {
     request<{ item: ScmItem; balances: StockBalanceRecord[] }>(`/items/${code}`, { token }),
   createScmItem: (
     token: string,
-    body: { code: string; name: string; description?: string | null; category?: string | null; unitOfMeasure: string },
+    body: {
+      code: string;
+      name: string;
+      description?: string | null;
+      category?: string | null;
+      unitOfMeasure: string;
+      grade?: ScmGrade | null;
+    },
   ) => request<ScmItem>("/items", { method: "POST", token, body }),
-  updateScmItem: (token: string, code: string, body: { name?: string; isActive?: boolean }) =>
+  updateScmItem: (token: string, code: string, body: { name?: string; isActive?: boolean; grade?: ScmGrade | null }) =>
     request<ScmItem>(`/items/${code}`, { method: "PATCH", token, body }),
 
   suppliers: (token: string, query: { search?: string } = {}) => {
@@ -4984,7 +4994,13 @@ export type ScmItem = {
   category: string | null;
   unitOfMeasure: string;
   isActive: boolean;
+  grade?: ScmGrade | null;
 };
+
+/** Food-grade separation class; null = unrestricted. */
+export type ScmGrade = "food" | "non_food";
+
+export type WorkOrderType = "regular" | "back_charge";
 
 export type SupplierRecord = {
   id: string;
@@ -5124,6 +5140,7 @@ export type ScmWarehouse = {
   organizationUnitId: string | null;
   address: string | null;
   isActive: boolean;
+  grade?: ScmGrade | null;
   createdAt: string;
   createdBy: string | null;
   updatedAt: string;
@@ -5131,6 +5148,7 @@ export type ScmWarehouse = {
 };
 
 export type CreateScmWarehouseBody = {
+  grade?: ScmGrade | null;
   code: string;
   name: string;
   siteId?: string | null;
@@ -5140,6 +5158,7 @@ export type CreateScmWarehouseBody = {
 };
 
 export type UpdateScmWarehouseBody = {
+  grade?: ScmGrade | null;
   name?: string;
   siteId?: string | null;
   organizationUnitId?: string | null;
@@ -5730,10 +5749,10 @@ export type ScmValuationLayer = {
   receivedDate: string;
   originalQuantity: number;
   remainingQuantity: number;
-  unitCost: number;
-  landedCostAdded: number;
-  effectiveUnitCost: number;
-  totalValue: number;
+  unitCost: number | null;
+  landedCostAdded: number | null;
+  effectiveUnitCost: number | null;
+  totalValue: number | null;
   createdAt: string;
 };
 
@@ -5767,7 +5786,7 @@ export type ScmLandedCost = {
   purchaseOrderId: string;
   costType: string;
   currency: string;
-  amount: number;
+  amount: number | null;
   allocationMethod: ScmLandedCostAllocationMethod;
   status: ScmLandedCostStatus;
   appliedAt: string | null;
@@ -5838,7 +5857,7 @@ export type ScmSupplierBid = {
   supplierId: string;
   submittedAt: string;
   currency: string;
-  totalAmount: number;
+  totalAmount: number | null;
   leadTimeDays: number;
   validUntil: string | null;
   status: ScmSupplierBidStatus;
@@ -6001,8 +6020,8 @@ export type ScmSupplierContract = {
   startDate: string;
   endDate: string;
   currency: string;
-  committedAmount: number;
-  spentAmount: number;
+  committedAmount: number | null;
+  spentAmount: number | null;
   status: ScmSupplierContractStatus;
   workflowInstanceId: string | null;
   termsAndConditions: string | null;
@@ -6050,10 +6069,10 @@ export type ScmSpendAnalyticsSnapshot = {
   organizationUnitId: string | null;
   supplierId: string | null;
   itemCategory: string | null;
-  totalSpend: number;
+  totalSpend: number | null;
   poCount: number;
   itemsPurchasedCount: number;
-  avgPoValue: number;
+  avgPoValue: number | null;
   createdAt: string;
   createdBy: string | null;
 };
@@ -6428,6 +6447,7 @@ export type WorkOrder = {
   verificationNotes: string | null;
   verifiedAt: string | null;
   workflowInstanceId: string | null;
+  woType?: WorkOrderType;
 };
 
 export type WorkOrderChecklistItem = {

@@ -51,15 +51,50 @@ export function formatDateShort(value: string | null | undefined): string {
   return new Date(value).toLocaleDateString(localeTag());
 }
 
-/** Groups a decimal string for display without converting it to a number. */
-export function formatMoney(value: string | null | undefined): string {
+/** Expands an exponent-notation numeric string ("1e21", "-1.5E-7") into plain digits. */
+function expandExponent(value: string): string {
+  const m = /^([+-]?)(\d*)\.?(\d*)[eE]([+-]?\d+)$/.exec(value);
+  if (!m || (m[2] === "" && m[3] === "")) return value;
+  const [, sign, int = "", frac = "", exp] = m;
+  const shift = Number(exp);
+  if (!Number.isInteger(shift) || Math.abs(shift) > 1000) return value;
+  const digits = int + frac;
+  const point = int.length + shift;
+  let out: string;
+  if (point <= 0) out = `0.${"0".repeat(-point)}${digits}`;
+  else if (point >= digits.length) out = digits + "0".repeat(point - digits.length);
+  else out = `${digits.slice(0, point)}.${digits.slice(point)}`;
+  return (sign === "-" ? "-" : "") + out;
+}
+
+/** Groups a decimal string for display without converting it to a number.
+ * Rounds half away from zero to 2 decimals on the decimal digits (no float math). */
+export function formatMoney(value: string | number | null | undefined): string {
+  // Price fields are `null` when the viewer lacks `wms.price.view`.
   if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "—";
+    // String(n) switches to exponent notation for |n| >= 1e21 or tiny values.
+    value = expandExponent(String(value));
+  } else if (/[eE]/.test(value)) {
+    value = expandExponent(value.trim());
+  }
   const negative = value.startsWith("-");
-  const unsigned = negative ? value.slice(1) : value;
-  const [whole, fraction = "00"] = unsigned.split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  const cents = (fraction + "00").slice(0, 2);
-  return `${negative ? "−" : ""}${grouped},${cents}`;
+  const unsigned = negative || value.startsWith("+") ? value.slice(1) : value;
+  const [whole = "0", fraction = ""] = unsigned.split(".");
+  let cents = (fraction + "00").slice(0, 2);
+  let integer = whole === "" ? "0" : whole;
+  if (/^\d+$/.test(integer) && /^\d*$/.test(fraction)) {
+    // Round half-up on the first dropped digit, carrying through BigInt on the digit string.
+    if ((fraction[2] ?? "0") >= "5") {
+      const bumped = (BigInt(integer + cents) + 1n).toString().padStart(3, "0");
+      integer = bumped.slice(0, -2);
+      cents = bumped.slice(-2);
+    }
+  }
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const isZero = /^0*$/.test(integer) && cents === "00";
+  return `${negative && !isZero ? "−" : ""}${grouped},${cents}`;
 }
 
 /** Display-only due-date indicator derived solely from a backend-provided

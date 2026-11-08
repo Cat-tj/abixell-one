@@ -303,6 +303,37 @@ export interface WorkflowRepository {
   listAssignmentsForInstance(workflowInstanceId: string): Promise<WorkflowInstanceAssignment[]>;
   listAssignmentsForInstances(workflowInstanceIds: string[]): Promise<WorkflowInstanceAssignment[]>;
   listPendingAssignmentsByTenant(tenantId: string): Promise<WorkflowInstanceAssignment[]>;
+  /** Site-scoping (batched): every Assignment, in any status, that could make
+   * `userId` "associated" with its Instance — a specific_user row naming them,
+   * or a role row for `roleCode` (the actor's ACTIVE role; null = none). One
+   * query for the whole tenant (or the given Instances) instead of one per
+   * Instance. */
+  listAssociationCandidateAssignments(
+    tenantId: string,
+    userId: string,
+    roleCode: string | null,
+    instanceIds?: string[],
+  ): Promise<WorkflowInstanceAssignment[]>;
+  /** Site-scoping (batched): Instances of the tenant narrowed in SQL to those
+   * started by `startedBy`, in `instanceIds`, owned by one of
+   * `organizationUnitIds` (`context_data.organizationUnitId`) or stamped with
+   * one of `legalEntityIds` (`context_data.legalEntityId`). */
+  listInstancesNarrowed(
+    tenantId: string,
+    narrow: {
+      startedBy: string;
+      instanceIds: string[];
+      organizationUnitIds: string[];
+      legalEntityIds: string[];
+      customerIds: string[];
+    },
+  ): Promise<WorkflowInstance[]>;
+  /** Ids of Instances started by `userId` (optionally limited to `instanceIds`). */
+  listInstanceIdsStartedBy(
+    tenantId: string,
+    userId: string,
+    instanceIds?: string[],
+  ): Promise<string[]>;
   listOverdueAssignments(tenantId: string): Promise<WorkflowInstanceAssignment[]>;
   /** ADR-0008: atomic optimistic claim. Succeeds (returns the row) only
    * if the Assignment is still `pending` AND (unclaimed, already claimed

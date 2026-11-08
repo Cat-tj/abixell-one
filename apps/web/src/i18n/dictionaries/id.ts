@@ -4726,4 +4726,11 @@ export const id: Record<MessageKey, string> = {
   "documents.printoutTitle": "Cetak",
   "documents.printoutDesc": "Hasilkan cetakan PDF dari catatan.",
   "documents.printoutComingSoon": "Pembuatan cetakan segera hadir.",
+  "wo.type.label": "Tipe work order",
+  "wo.type.regular": "Reguler",
+  "wo.type.backCharge": "Back-charge",
+  "grade.label": "Grade",
+  "grade.food": "Food",
+  "grade.nonFood": "Non-food",
+  "grade.unrestricted": "Tidak dibatasi",
 };

@@ -359,6 +359,8 @@ export class HseService {
     const { instance } = await this.workflow.startInstance(actor, {
       definitionCode: HSE_WORKFLOW_DEFINITION_CODE,
       entityId: id,
+      // ADR-0012: the record's owning Organization Unit (site-scoped read visibility).
+      contextData: { organizationUnitId: record.organizationUnitId },
     });
 
     await this.repo.setRecordWorkflowInstance(id, instance.id);

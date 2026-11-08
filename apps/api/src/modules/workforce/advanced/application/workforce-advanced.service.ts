@@ -451,7 +451,7 @@ export class WorkforceAdvancedService {
     },
   ): Promise<WorkforceLeaveRequest> {
     await this.rbac.requirePermission(actor, "workforce.leave.manage");
-    await this.assertEmployeeInScope(actor, input.employeeId);
+    const employee = await this.assertEmployeeInScope(actor, input.employeeId);
 
     const startDate = this.validateDateOnly(input.startDate, "startDate");
     const endDate = this.validateDateOnly(input.endDate, "endDate");
@@ -508,6 +508,8 @@ export class WorkforceAdvancedService {
         definitionCode: WORKFORCE_LEAVE_WORKFLOW_DEFINITION_CODE,
         entityId: leaveRequest.id,
         contextData: {
+          // ADR-0012: follows the employee's owning Organization Unit.
+          organizationUnitId: employee.organizationUnitId,
           employeeId: leaveRequest.employeeId,
           leaveTypeId: leaveRequest.leaveTypeId,
           totalDays: leaveRequest.totalDays,
@@ -669,7 +671,7 @@ export class WorkforceAdvancedService {
     },
   ): Promise<WorkforceOvertimeRequest> {
     await this.rbac.requirePermission(actor, "workforce.leave.manage");
-    await this.assertEmployeeInScope(actor, input.employeeId);
+    const employee = await this.assertEmployeeInScope(actor, input.employeeId);
 
     const overtimeDate = this.validateDateOnly(input.overtimeDate, "overtimeDate");
     this.validateTimeString(input.startTime, "startTime");
@@ -703,6 +705,8 @@ export class WorkforceAdvancedService {
         definitionCode: WORKFORCE_OVERTIME_WORKFLOW_DEFINITION_CODE,
         entityId: overtimeRequest.id,
         contextData: {
+          // ADR-0012: follows the employee's owning Organization Unit.
+          organizationUnitId: employee.organizationUnitId,
           employeeId: overtimeRequest.employeeId,
           overtimeDate: overtimeRequest.overtimeDate,
           estimatedHours: overtimeRequest.estimatedHours,
@@ -1302,6 +1306,8 @@ export class WorkforceAdvancedService {
         definitionCode: WORKFORCE_JOB_POSTING_WORKFLOW_DEFINITION_CODE,
         entityId: jobPosting.id,
         contextData: {
+          // ADR-0012: the posting's owning Organization Unit (null = company-wide posting, tenant-level).
+          organizationUnitId: jobPosting.organizationUnitId,
           postingCode: jobPosting.postingCode,
           title: jobPosting.title,
           headcountTarget: jobPosting.headcountTarget,
@@ -1711,7 +1717,7 @@ export class WorkforceAdvancedService {
     },
   ): Promise<WorkforcePerformanceReview> {
     await this.rbac.requirePermission(actor, "workforce.performance.manage");
-    await this.assertEmployeeInScope(actor, input.employeeId);
+    const employee = await this.assertEmployeeInScope(actor, input.employeeId);
 
     const periodStart = this.validateDateOnly(input.periodStart, "periodStart");
     const periodEnd = this.validateDateOnly(input.periodEnd, "periodEnd");
@@ -1744,6 +1750,8 @@ export class WorkforceAdvancedService {
         definitionCode: WORKFORCE_PERFORMANCE_REVIEW_WORKFLOW_DEFINITION_CODE,
         entityId: review.id,
         contextData: {
+          // ADR-0012: follows the employee's owning Organization Unit.
+          organizationUnitId: employee.organizationUnitId,
           employeeId: review.employeeId,
           reviewCode: review.reviewCode,
           periodStart: review.periodStart,

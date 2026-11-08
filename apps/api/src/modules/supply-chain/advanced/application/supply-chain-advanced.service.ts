@@ -18,6 +18,7 @@
  */
 
 import crypto from "node:crypto";
+import { assertGradeCompatible, assertWarehouseRegradeAllowed } from "../domain/grade-policy.js";
 import type { ActorContext } from "../../../../domain/shared-kernel/audit-context.js";
 import {
   ConflictError,
@@ -335,11 +336,16 @@ export class SupplyChainAdvancedService {
     if (input.organizationUnitId !== undefined) {
       await this.assertOrganizationUnitInScope(actor, input.organizationUnitId);
     }
-
-    const updated = await this.repo.updateWarehouse(actor.tenantId, warehouseId, {
-      ...input,
-      updatedBy: actor.userId,
-    });
+    // Re-grading must not strand stock of the other grade inside the warehouse.
+    // The held-stock check runs inside the repository transaction under a row lock.
+    const updated = await this.repo.updateWarehouse(
+      actor.tenantId,
+      warehouseId,
+      { ...input, updatedBy: actor.userId },
+      input.grade !== undefined
+        ? (current, held) => assertWarehouseRegradeAllowed(current.code, input.grade ?? null, held)
+        : undefined,
+    );
     if (!updated) {
       throw new NotFoundError("ScmWarehouse", warehouseId);
     }
@@ -885,8 +891,16 @@ export class SupplyChainAdvancedService {
     input: Omit<CreateScmStockTransferInput, "createdBy" | "transferNumber"> & { transferNumber?: string },
   ): Promise<StockTransferDetailView> {
     await this.rbac.requirePermission(actor, "supply_chain.inventory.manage");
-    await this.assertWarehouseInScope(actor, input.fromWarehouseId);
+    const fromWarehouse = await this.assertWarehouseInScope(actor, input.fromWarehouseId);
     await this.assertWarehouseInScope(actor, input.toWarehouseId);
+    // Fail early (before a workflow instance exists) on grade-incompatible lines;
+    // the ledger write enforces the same rule again at shipment/receipt time.
+    for (const line of input.lines ?? []) {
+      for (const warehouseId of [input.fromWarehouseId, input.toWarehouseId]) {
+        const ctx = await this.repo.findGradeContext(actor.tenantId, line.itemId, warehouseId);
+        if (ctx) assertGradeCompatible(ctx);
+      }
+    }
 
     const transferNumber =
       (input.transferNumber ?? (await this.configuration.generateNumberForTenant(
@@ -907,6 +921,8 @@ export class SupplyChainAdvancedService {
         definitionCode: SCM_STOCK_TRANSFER_WORKFLOW_DEFINITION_CODE,
         entityId: transfer.id,
         contextData: {
+          // ADR-0012: follows the SOURCE warehouse's owning unit (the shipping site).
+          organizationUnitId: fromWarehouse.organizationUnitId,
           transferNumber,
           fromWarehouseId: input.fromWarehouseId,
           toWarehouseId: input.toWarehouseId,
@@ -1137,7 +1153,7 @@ export class SupplyChainAdvancedService {
     input: Omit<CreateScmStockOpnameInput, "createdBy" | "opnameNumber"> & { opnameNumber?: string },
   ): Promise<StockOpnameDetailView> {
     await this.rbac.requirePermission(actor, "supply_chain.inventory.manage");
-    await this.assertWarehouseInScope(actor, input.warehouseId);
+    const opnameWarehouse = await this.assertWarehouseInScope(actor, input.warehouseId);
 
     const opnameNumber =
       (input.opnameNumber ?? (await this.configuration.generateNumberForTenant(
@@ -1158,6 +1174,8 @@ export class SupplyChainAdvancedService {
         definitionCode: SCM_STOCK_OPNAME_WORKFLOW_DEFINITION_CODE,
         entityId: opname.id,
         contextData: {
+          // ADR-0012: follows the warehouse's owning unit.
+          organizationUnitId: opnameWarehouse.organizationUnitId,
           opnameNumber,
           warehouseId: input.warehouseId,
         },
@@ -1963,6 +1981,8 @@ export class SupplyChainAdvancedService {
         definitionCode: SCM_SUPPLIER_EVALUATION_WORKFLOW_DEFINITION_CODE,
         entityId: evaluation.id,
         contextData: {
+          // Tenant-level entity (assertTenantLevelScope): no owning unit to stamp.
+          // Visible to tenant-scoped actors, starter and eligible assignees only (ADR-0007 amendment).
           evaluationNumber,
           supplierId: input.supplierId,
           overallScore,
@@ -2116,6 +2136,8 @@ export class SupplyChainAdvancedService {
         definitionCode: SCM_SUPPLIER_CONTRACT_WORKFLOW_DEFINITION_CODE,
         entityId: contract.id,
         contextData: {
+          // Tenant-level entity (assertTenantLevelScope): no owning unit to stamp.
+          // Visible to tenant-scoped actors, starter and eligible assignees only (ADR-0007 amendment).
           contractNumber,
           title: contract.title,
           supplierId: input.supplierId,
@@ -3313,6 +3335,10 @@ export class SupplyChainAdvancedService {
         definitionCode: "scm_vendor_invoice",
         entityId: result.vendorInvoice.id,
         contextData: {
+          // ADR-0012: follows the receiving warehouse's owning unit (null = tenant-level warehouse).
+          organizationUnitId:
+            (await this.repo.findWarehouseById(actor.tenantId, grResult.receiving.warehouseId))
+              ?.organizationUnitId ?? null,
           invoiceNumber: result.vendorInvoice.invoiceNumber,
           purchaseOrderId: input.purchaseOrderId,
           supplierId: input.supplierId,
@@ -3581,6 +3607,8 @@ export class SupplyChainAdvancedService {
         definitionCode: "scm_payment_batch",
         entityId: result.paymentBatch.id,
         contextData: {
+          // ADR-0012: the batch's owning Organization Unit (scope-checked above).
+          organizationUnitId: result.paymentBatch.organizationUnitId,
           batchNumber: result.paymentBatch.batchNumber,
           approvedAmount: result.paymentBatch.approvedAmount,
           currency: result.paymentBatch.currency,
@@ -4010,7 +4038,7 @@ export class SupplyChainAdvancedService {
     input: Omit<CreateScmInventoryDisposalInput, "disposalNumber" | "createdBy"> & { disposalNumber?: string },
   ): Promise<{ disposal: ScmInventoryDisposal; lines: ScmInventoryDisposalLine[] }> {
     await this.rbac.requirePermission(actor, "supply_chain.disposal.manage");
-    await this.assertWarehouseInScope(actor, input.warehouseId);
+    const disposalWarehouse = await this.assertWarehouseInScope(actor, input.warehouseId);
     if (input.organizationUnitId) {
       await this.assertOrganizationUnitInScope(actor, input.organizationUnitId);
     }
@@ -4048,6 +4076,8 @@ export class SupplyChainAdvancedService {
         definitionCode: "scm_inventory_disposal",
         entityId: disposal.id,
         contextData: {
+          // ADR-0012: explicit unit if given (scope-checked), else the warehouse's owning unit.
+          organizationUnitId: input.organizationUnitId ?? disposalWarehouse.organizationUnitId,
           disposalNumber,
           warehouseId: input.warehouseId,
           disposalType: input.disposalType ?? "write_off",

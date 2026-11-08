@@ -368,6 +368,8 @@ export interface AssetAdvancedRepository {
   // --- Narrow cross-domain reads kept behind this port --------------------
   /** Asset Core's asset existence check — never imports AssetService. */
   assetExists(tenantId: string, assetId: string): Promise<boolean>;
+  /** The asset's responsible Organization Unit (Data Scope anchor), or null. */
+  findAssetOrganizationUnitId(tenantId: string, assetId: string): Promise<string | null>;
   /** Supply Chain Core's item existence check — never imports SupplyChainService. */
   itemExists(tenantId: string, itemId: string): Promise<boolean>;
 }

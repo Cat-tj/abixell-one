@@ -142,6 +142,9 @@ export const PERMISSION_MODULE_PREFIXES: ReadonlyArray<readonly [string, ModuleC
   ["tax_registration.", "platform"],
   ["employee_profile.", "platform"],
 
+  // LOA price visibility (`wms.price.view`) gates cost/price fields on WMS reads.
+  ["wms.", "warehouse_management"],
+
   // Supply Chain — warehouse custody and valuation.
   ["supply_chain.warehouse_task.", "warehouse_management"],
   ["supply_chain.warehouse.", "warehouse_management"],
@@ -237,6 +240,9 @@ export function attributePermission(code: string): ModuleCode | undefined {
  */
 export const API_SEGMENT_MODULES: Readonly<Record<string, ModuleCode>> = {
   // Platform.
+  // Wave A8 / PLT-ADV-001 — the versioned partner surface under /api/partner/*
+  // is platform-level API economy capability.
+  api: "platform",
   admin: "platform",
   "app-metadata": "platform",
   "audit-log": "platform",
@@ -410,6 +416,10 @@ export const API_PATH_MODULE_OVERRIDES: ReadonlyArray<readonly [string, ModuleCo
   // it is a Work Order write, not a survey response. Without this override the
   // first-segment table's `public: "survey_assessment"` row would claim it.
   ["/public/work-orders", "service_operations"],
+
+  // Wave A8 / PLT-ADV-001 — the versioned partner surface is platform-level
+  // API economy capability, not the `integration` outbox worker.
+  ["/api/partner", "platform"],
 ];
 
 /** Longest first, so a more specific subtree beats a shorter one that is also

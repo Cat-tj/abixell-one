@@ -175,6 +175,16 @@ export class PgBudgetRepository {
     return r.rows.length > 0 ? toBudget(r.rows[0]) : null;
   }
 
+  /** The Organization Unit a cost center is placed in (finance_cost_centers.org_unit_id),
+   * or null. Narrow read used to stamp the owning unit on the budget approval Instance. */
+  async findCostCenterOrganizationUnitId(tenantId: string, costCenterId: string): Promise<string | null> {
+    const r = await this.pool.query(
+      `SELECT org_unit_id FROM finance_cost_centers WHERE id = $1 AND tenant_id = $2`,
+      [costCenterId, tenantId],
+    );
+    return r.rows.length > 0 ? ((r.rows[0].org_unit_id as string | null) ?? null) : null;
+  }
+
   async listBudgets(
     tenantId: string,
     filter: { legalEntityId?: string; fiscalYearCode?: string; scenario?: BudgetScenario },

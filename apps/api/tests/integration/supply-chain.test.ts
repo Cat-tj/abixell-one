@@ -117,6 +117,7 @@ describe("Phase 4 — Supply Chain Core", () => {
       "supply_chain.read",
       "supply_chain.manage",
       "supply_chain.configure",
+      "wms.price.view",
       "workflow.instance.start",
       "workflow.instance.act",
     ]);
@@ -526,5 +527,23 @@ describe("Phase 4 — Supply Chain Core", () => {
     expect(movements.some((m: { id: string; quantity: number }) => m.id === movementId && m.quantity === 6)).toBe(true);
     const balance = (await get("/stock/balances?itemCode=rename-me", readerToken)).json()[0];
     expect(balance.quantity).toBe(6);
+  });
+
+  it("Grade: regrading an item with stock in a conflicting-grade warehouse is rejected (409 GRADE_MISMATCH)", async () => {
+    const item = (await post("/items", buyerToken, { code: "grade-rice", name: "Rice", unitOfMeasure: "EA", grade: "food" })).json();
+    const wh = await pool.query(
+      `INSERT INTO scm_warehouses (tenant_id, code, name, grade) VALUES ($1, 'WH-GRADE-F', 'Food WH', 'food') RETURNING id`,
+      [tenantId],
+    );
+    await pool.query(
+      `INSERT INTO scm_advanced_stock_balances (tenant_id, item_id, warehouse_id, quantity) VALUES ($1, $2, $3, 5)`,
+      [tenantId, item.id, wh.rows[0].id],
+    );
+    const blocked = await patch("/items/grade-rice", buyerToken, { grade: "non_food" });
+    expect(blocked.statusCode).toBe(409);
+    expect(JSON.stringify(blocked.json())).toContain("food warehouse WH-GRADE-F"); // code is on ConflictError (unit-tested)
+    // stock gone -> regrade allowed
+    await pool.query(`UPDATE scm_advanced_stock_balances SET quantity = 0 WHERE tenant_id = $1 AND item_id = $2`, [tenantId, item.id]);
+    expect((await patch("/items/grade-rice", buyerToken, { grade: "non_food" })).statusCode).toBe(200);
   });
 });

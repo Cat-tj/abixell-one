@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app.js";
+import { workOrderUsesContractPricing } from "../../src/modules/service-operations/core/domain/service-operations.entity.js";
 import { pool } from "../../src/infrastructure/persistence/db.js";
 import { activateAllModules, authHeader, bootstrapTenant, createReadOnlyRole, login, provisionFirstAdmin } from "./helpers.js";
 
@@ -564,6 +565,67 @@ describe("Phase 2 — Service Operations & Work Management Core", () => {
       plannedEndAt: new Date(Date.now() + 3600000).toISOString(),
     });
     expect(bad.statusCode).toBe(400);
+  });
+
+  describe("WO type — regular vs back_charge", () => {
+    it("defaults to regular and keeps the contract link", async () => {
+      const code = `WOT-${Date.now()}`;
+      const c = await pool.query(
+        `INSERT INTO contracts (tenant_id, customer_id, code, name) VALUES ($1,$2,$3,'WO type contract') RETURNING id`,
+        [tenantId, customerAId, code],
+      );
+      const contractId = c.rows[0].id as string;
+      const plain = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Default type",
+      });
+      expect(plain.statusCode).toBe(201);
+      expect(plain.json().woType).toBe("regular");
+      const withContract = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Regular with contract",
+        contractId,
+        woType: "regular",
+      });
+      expect(withContract.statusCode).toBe(201);
+      expect(withContract.json().woType).toBe("regular");
+      expect(withContract.json().contractId).toBe(contractId);
+      expect(workOrderUsesContractPricing(withContract.json())).toBe(true);
+      const detail = await get(`/work-orders/${withContract.json().id}`, coordinatorToken);
+      expect(detail.json().workOrder.woType).toBe("regular");
+    });
+
+    it("creates a back_charge WO that skips contract pricing and rejects a contract", async () => {
+      const bc = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Back charge",
+        woType: "back_charge",
+      });
+      expect(bc.statusCode).toBe(201);
+      expect(bc.json().woType).toBe("back_charge");
+      expect(bc.json().contractId).toBeNull();
+      expect(workOrderUsesContractPricing(bc.json())).toBe(false);
+
+      const bad = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Back charge with contract",
+        woType: "back_charge",
+        contractId: "00000000-0000-4000-8000-000000000001",
+      });
+      expect(bad.statusCode).toBe(400);
+
+      const invalid = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Bad type",
+        woType: "other",
+      });
+      expect(invalid.statusCode).toBe(400);
+    });
   });
 
   describe("SO-CORE-016 — Work Order Serving Phase", () => {

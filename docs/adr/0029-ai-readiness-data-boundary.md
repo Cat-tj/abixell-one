@@ -1,6 +1,6 @@
 # ADR-0029: AI Readiness Data Boundary
 
-- **Status:** PROPOSED — draft for Founder review; no runtime authorization
+- **Status:** APPROVED — Founder authorization 2026-11-06; runtime implementation authorized under Wave A8
 - **Date:** 2026-10-26
 - **Source:** Pre-Wave A8 planning decision; scopes `PLT-ADV-002`
 

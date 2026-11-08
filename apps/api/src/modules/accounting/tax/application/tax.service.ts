@@ -293,6 +293,11 @@ export class TaxService {
         taxType: rule.taxType,
         versionNumber: version.versionNumber,
         rate: version.rate,
+        // A tax rule belongs to a Legal Entity, not to an Organization Unit
+        // (no owning unit exists). Stamp the Legal Entity so Legal
+        // Entity-scoped actors keep seeing the approval; unit-scoped actors do
+        // not, by design (ADR-0007 amendment 2026-11-08).
+        legalEntityId: rule.legalEntityId,
       },
     });
     await this.repo.setVersionWorkflowInstance(actor.tenantId, version.id, instance.id);

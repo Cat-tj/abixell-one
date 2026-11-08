@@ -1,5 +1,5 @@
 import type { AuditService } from "../audit/audit.service.js";
-import type { RbacService } from "../rbac/rbac.service.js";
+import type { ActiveOrganizationUnitCoverage, RbacService } from "../rbac/rbac.service.js";
 import type { EventBus } from "../event/event-bus.js";
 import type { ActorContext } from "../../domain/shared-kernel/audit-context.js";
 import {
@@ -156,6 +156,13 @@ function documentAmountOf(instance: { contextData: Record<string, unknown> }): s
  * it, when", workflow_history is "how did this specific transaction get
  * from Submit to Complete".
  */
+interface InstanceVisibility {
+  coverage: ActiveOrganizationUnitCoverage;
+  associatedInstanceIds: Set<string>;
+  customerId: string | null;
+  isVisible(instance: WorkflowInstance): boolean;
+}
+
 export class WorkflowService {
   constructor(
     private readonly repo: WorkflowRepository,
@@ -428,6 +435,55 @@ export class WorkflowService {
     return tx;
   }
 
+  /**
+   * HTTP entry point (`POST /workflow/instances`). `contextData` is
+   * caller-supplied here and now drives read visibility
+   * (`organizationUnitId` / `legalEntityId` / `customerId`), so for a
+   * non-tenant-scoped actor each such stamp must lie inside the actor's ACTIVE
+   * Data Scope; otherwise a scoped actor could plant an Instance into another
+   * site's queue. Internal business modules call `startInstance` directly
+   * (trusted callers deriving the stamps from the parent entity, ADR-0012) and
+   * are not subject to this check.
+   */
+  async startInstanceFromRequest(
+    actor: ActorContext,
+    input: { definitionCode: string; entityId: string; contextData?: Record<string, unknown> },
+  ) {
+    await this.rbac.requirePermission(actor, "workflow.instance.start");
+    await this.assertRequestContextStampsWithinScope(actor, input.contextData ?? {});
+    return this.startInstance(actor, input);
+  }
+
+  private async assertRequestContextStampsWithinScope(
+    actor: ActorContext,
+    contextData: Record<string, unknown>,
+  ): Promise<void> {
+    if (actor.scopeType === "tenant") return;
+    const unitId = contextData.organizationUnitId;
+    if (unitId !== undefined && unitId !== null) {
+      if (typeof unitId !== "string") {
+        throw new ValidationError("contextData.organizationUnitId must be a string");
+      }
+      if (!(await this.rbac.isActiveOrganizationUnitScopeCovered(actor, unitId))) {
+        throw new ForbiddenError(
+          "contextData.organizationUnitId is outside the active Role's Data Scope",
+        );
+      }
+    }
+    const legalEntityId = contextData.legalEntityId;
+    if (legalEntityId !== undefined && legalEntityId !== null) {
+      if (actor.scopeType !== "legal_entity" || actor.scopeLegalEntityId !== legalEntityId) {
+        throw new ForbiddenError("contextData.legalEntityId is outside the active Role's Data Scope");
+      }
+    }
+    const customerId = contextData.customerId;
+    if (customerId !== undefined && customerId !== null) {
+      if (actor.scopeType !== "customer" || actor.scopeCustomerId !== customerId) {
+        throw new ForbiddenError("contextData.customerId is outside the active Role's Data Scope");
+      }
+    }
+  }
+
   async startInstance(
     actor: ActorContext,
     input: { definitionCode: string; entityId: string; contextData?: Record<string, unknown> },
@@ -485,7 +541,7 @@ export class WorkflowService {
 
   async getInstance(actor: ActorContext, id: string) {
     await this.rbac.requirePermission(actor, "workflow.instance.read");
-    const instance = await this.getInstanceOrThrow(actor.tenantId, id);
+    const instance = await this.getVisibleInstanceOrThrow(actor, id);
     const assignments = await this.repo.listAssignmentsForInstance(instance.id);
     return { instance, assignments };
   }
@@ -645,7 +701,21 @@ export class WorkflowService {
 
   async listInstances(actor: ActorContext): Promise<WorkflowInstance[]> {
     await this.rbac.requirePermission(actor, "workflow.instance.read");
-    return this.repo.listInstances(actor.tenantId);
+    if (actor.scopeType === "tenant") return this.repo.listInstances(actor.tenantId);
+    // Constant number of queries: units once, association assignments once, one
+    // SQL-narrowed instance read; the same in-memory predicate as the single
+    // read then confirms each row (list and detail cannot drift).
+    const visibility = await this.buildInstanceVisibility(actor);
+    const candidates = await this.repo.listInstancesNarrowed(actor.tenantId, {
+      startedBy: actor.userId,
+      instanceIds: [...visibility.associatedInstanceIds],
+      organizationUnitIds: [...visibility.coverage.coveredUnitIds],
+      legalEntityIds: visibility.coverage.usableLegalEntityId
+        ? [visibility.coverage.usableLegalEntityId]
+        : [],
+      customerIds: visibility.customerId ? [visibility.customerId] : [],
+    });
+    return candidates.filter((instance) => visibility.isVisible(instance));
   }
 
   /**
@@ -710,7 +780,7 @@ export class WorkflowService {
 
   async getHistory(actor: ActorContext, instanceId: string) {
     await this.rbac.requirePermission(actor, "workflow.instance.read");
-    const instance = await this.getInstanceOrThrow(actor.tenantId, instanceId);
+    const instance = await this.getVisibleInstanceOrThrow(actor, instanceId);
     return this.repo.listHistory(instance.id);
   }
 
@@ -720,20 +790,10 @@ export class WorkflowService {
   async listMyAssignments(actor: ActorContext): Promise<WorkflowInstanceAssignment[]> {
     await this.rbac.requirePermission(actor, "workflow.instance.read");
     const pending = await this.repo.listPendingAssignmentsByTenant(actor.tenantId);
-    const mine: WorkflowInstanceAssignment[] = [];
-    for (const assignment of pending) {
-      if (assignment.assignmentType === "specific_user") {
-        if (assignment.assignedUserId === actor.userId) mine.push(assignment);
-        continue;
-      }
-      const covers = await this.rbac.hasActiveRoleCoveringScope(
-        actor,
-        assignment.assignedRoleCode!,
-        assignment.assignedOrganizationUnitId,
-      );
-      if (covers) mine.push(assignment);
-    }
-    return mine;
+    // Coverage is computed once per request, then matched in memory — the same
+    // rule as `RbacService.hasActiveRoleCoveringScope` per assignment.
+    const coverage = await this.rbac.buildActiveOrganizationUnitCoverage(actor);
+    return pending.filter((assignment) => this.isActorEligibleWithCoverage(actor, coverage, assignment));
   }
 
   /**
@@ -1145,6 +1205,137 @@ export class WorkflowService {
       );
     }
     return version;
+  }
+
+  /**
+   * Site-scoping of tasks. The raw `/workflow/instances*` reads were
+   * Tenant-wide for any holder of `workflow.instance.read`. For an actor whose
+   * ACTIVE Data Scope is narrower than the Tenant (a field officer scoped to
+   * one Site / Organization Unit), an Instance is visible only when:
+   *  - the actor started it, or is a named/eligible assignee on it
+   *    (`isActorAssociatedWithInstance` — Role+Scope for role queues), OR
+   *  - its owning Organization Unit (`contextData.organizationUnitId`, set by
+   *    business modules from the parent entity's owning unit — ADR-0012 style)
+   *    is covered by the active Data Scope (ADR-0009 hierarchical walk).
+   * Tenant-scoped actors are unchanged. Reuses existing RbacService checks;
+   * no new authorization mechanism.
+   */
+  /**
+   * One request-scoped description of "which Instances may this actor read",
+   * shared by the list and the single read so they cannot drift. Built once:
+   * the tenant's units (one query), the actor's candidate Assignments (one
+   * query, optionally narrowed to `instanceIds`).
+   *
+   * Visible when (tenant-wide actors: always):
+   *  - the actor started it, or
+   *  - the actor is associated with it (named assignee, or holder of the
+   *    assigned Role whose ACTIVE scope covers the assignment — any status), or
+   *  - `contextData.organizationUnitId` is covered by the active Data Scope
+   *    (ADR-0009), or
+   *  - `contextData.legalEntityId` equals the active (usable) Legal Entity
+   *    scope — for Instances whose parent entity belongs to a Legal Entity but
+   *    to no Organization Unit (tax rule, budget), or
+   *  - `contextData.customerId` equals the active customer scope (ADR-0011).
+   * Instances with none of these stamps (tenant-level entities such as a
+   * consolidation group) are visible only to tenant-wide actors, their starter
+   * and eligible assignees.
+   */
+  private async buildInstanceVisibility(
+    actor: ActorContext,
+    instanceIds?: string[],
+  ): Promise<InstanceVisibility> {
+    const coverage = await this.rbac.buildActiveOrganizationUnitCoverage(actor);
+    const candidates = coverage.tenantWide
+      ? []
+      : await this.repo.listAssociationCandidateAssignments(
+          actor.tenantId,
+          actor.userId,
+          actor.assignmentId === null ? null : actor.roleCode,
+          instanceIds,
+        );
+    const associatedInstanceIds = new Set<string>();
+    for (const assignment of candidates) {
+      if (this.isActorEligibleWithCoverage(actor, coverage, assignment)) {
+        associatedInstanceIds.add(assignment.workflowInstanceId);
+      }
+    }
+    const customerId =
+      actor.assignmentId !== null && actor.scopeType === "customer" ? actor.scopeCustomerId : null;
+    const isVisible = (instance: WorkflowInstance): boolean => {
+      if (instance.tenantId !== actor.tenantId) return false;
+      if (coverage.tenantWide) return true;
+      if (instance.startedBy === actor.userId) return true;
+      if (associatedInstanceIds.has(instance.id)) return true;
+      const ctx = (instance.contextData ?? {}) as Record<string, unknown>;
+      if (typeof ctx.organizationUnitId === "string" && coverage.covers(ctx.organizationUnitId)) {
+        return true;
+      }
+      if (
+        coverage.usableLegalEntityId !== null &&
+        ctx.legalEntityId === coverage.usableLegalEntityId
+      ) {
+        return true;
+      }
+      return customerId !== null && ctx.customerId === customerId;
+    };
+    return { coverage, associatedInstanceIds, customerId, isVisible };
+  }
+
+  /** Role+Scope / specific_user eligibility with a pre-built coverage — the
+   * synchronous twin of `RbacService.hasActiveRoleCoveringScope` /
+   * `isActorEligibleForAssignment`. */
+  private isActorEligibleWithCoverage(
+    actor: ActorContext,
+    coverage: ActiveOrganizationUnitCoverage,
+    assignment: WorkflowInstanceAssignment,
+  ): boolean {
+    if (assignment.assignmentType === "specific_user") {
+      return assignment.assignedUserId === actor.userId;
+    }
+    if (actor.assignmentId === null || actor.roleCode !== assignment.assignedRoleCode) return false;
+    if (actor.scopeType === "tenant") return true;
+    if (assignment.assignedOrganizationUnitId === null) return false;
+    return coverage.covers(assignment.assignedOrganizationUnitId);
+  }
+
+  /** Batched association: of `instanceIds` (or every tenant Instance when
+   * omitted), the ones `actor` started or is eligible assignee of — the same
+   * rule as `isActorAssociatedWithInstance`, in two queries total. */
+  async listAssociatedInstanceIds(
+    actor: ActorContext,
+    instanceIds?: string[],
+  ): Promise<Set<string>> {
+    if (instanceIds && instanceIds.length === 0) return new Set();
+    const coverage = await this.rbac.buildActiveOrganizationUnitCoverage(actor);
+    const candidates = await this.repo.listAssociationCandidateAssignments(
+      actor.tenantId,
+      actor.userId,
+      actor.assignmentId === null ? null : actor.roleCode,
+      instanceIds,
+    );
+    const result = new Set<string>();
+    for (const assignment of candidates) {
+      if (this.isActorEligibleWithCoverage(actor, coverage, assignment)) {
+        result.add(assignment.workflowInstanceId);
+      }
+    }
+    const started = await this.repo.listInstanceIdsStartedBy(actor.tenantId, actor.userId, instanceIds);
+    for (const id of started) result.add(id);
+    return result;
+  }
+
+  /** Out-of-scope reads are a 404, not a differently-shaped refusal. */
+  private async getVisibleInstanceOrThrow(
+    actor: ActorContext,
+    id: string,
+  ): Promise<WorkflowInstance> {
+    const instance = await this.getInstanceOrThrow(actor.tenantId, id);
+    if (actor.scopeType === "tenant") return instance;
+    const visibility = await this.buildInstanceVisibility(actor, [id]);
+    if (!visibility.isVisible(instance)) {
+      throw new NotFoundError("WorkflowInstance", id);
+    }
+    return instance;
   }
 
   private async getInstanceOrThrow(tenantId: string, id: string): Promise<WorkflowInstance> {

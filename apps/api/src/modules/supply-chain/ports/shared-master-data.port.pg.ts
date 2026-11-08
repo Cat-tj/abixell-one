@@ -24,6 +24,7 @@ function toItem(row: QueryResultRow): Item {
     description: row.description,
     category: row.category,
     unitOfMeasure: row.unit_of_measure,
+    grade: row.grade ?? null,
     isActive: Boolean(row.is_active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

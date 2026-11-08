@@ -211,13 +211,13 @@ describe("WP-FIN-A6-06a — Indonesia tax baseline", () => {
     );
     const audit = new AuditService(new PgAuditLogRepository(pool));
     const workflow = {
-      startInstance: async (_actor: ActorContext, input: { entityId: string }) => {
+      startInstance: async (_actor: ActorContext, input: { entityId: string; contextData?: unknown }) => {
         const r = await pool.query(
           `INSERT INTO workflow_instances
              (tenant_id, workflow_definition_id, workflow_version_id, entity_type, entity_id,
               current_step_id, context_data, started_by)
-           VALUES ($1,$2,$3,'finance_tax_rule_version',$4,$5,'{}'::jsonb,$6) RETURNING id`,
-          [tenantId, wf.definitionId, wf.versionId, input.entityId, wf.initialStepId, userId],
+           VALUES ($1,$2,$3,'finance_tax_rule_version',$4,$5,$7::jsonb,$6) RETURNING id`,
+          [tenantId, wf.definitionId, wf.versionId, input.entityId, wf.initialStepId, userId, JSON.stringify(input.contextData ?? {})],
         );
         return { instance: { id: r.rows[0].id } };
       },
@@ -439,6 +439,15 @@ describe("WP-FIN-A6-06a — Indonesia tax baseline", () => {
           idempotencyKey: `draft-${rule.id}`,
         }),
       ).rejects.toThrow(/No approved version/);
+    });
+
+    it("stamps the rule's Legal Entity on the approval Instance (no owning unit exists) for read visibility", async () => {
+      const { version } = await ruleWithDraft({ effectiveFrom: "2026-04-01" });
+      const r = await pool.query(`SELECT context_data FROM workflow_instances WHERE id = $1`, [
+        version.workflowInstanceId,
+      ]);
+      expect(r.rows[0].context_data.legalEntityId).toBe(legalEntityId);
+      expect(r.rows[0].context_data.organizationUnitId).toBeUndefined();
     });
 
     it("rejects a rate that is not a fraction", async () => {

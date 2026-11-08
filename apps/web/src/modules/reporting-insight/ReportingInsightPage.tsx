@@ -993,7 +993,7 @@ export function ReportingInsightPage() {
               {forecastResponse.forecast.status === "insufficient_data" ? (
                 <Card>
                   <div className="flex items-start gap-3">
-                    <div className="rounded-full bg-amber-100 p-2 text-amber-600">⚠️</div>
+                    <div aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-600">!</div>
                     <div>
                       <h4 className="font-semibold text-slate-900">{t("ri.main.t.insufficientOperationalHistory")}</h4>
                       <p className="mt-1 text-sm text-slate-600">

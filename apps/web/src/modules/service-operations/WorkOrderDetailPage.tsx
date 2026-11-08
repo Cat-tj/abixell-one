@@ -140,11 +140,14 @@ export function WorkOrderDetailPage() {
         title={`${workOrder.workOrderNumber} — ${workOrder.title}`}
         subtitle={serviceDefinition ? serviceDefinition.name : undefined}
         actions={
-          status ? (
-            <StatusPill tone={statusTone(status.instanceStatus)}>
-              {status.stepName ?? status.stepCode ?? status.instanceStatus}
-            </StatusPill>
-          ) : null
+          <span className="flex items-center gap-2">
+            {workOrder.woType === "back_charge" ? <Badge>{t("wo.type.backCharge")}</Badge> : null}
+            {status ? (
+              <StatusPill tone={statusTone(status.instanceStatus)}>
+                {status.stepName ?? status.stepCode ?? status.instanceStatus}
+              </StatusPill>
+            ) : null}
+          </span>
         }
       />
 

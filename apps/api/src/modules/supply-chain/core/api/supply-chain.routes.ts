@@ -12,18 +12,22 @@ import type { Container } from "../../../../composition-root.js";
  * endpoints exist.
  */
 
+const gradeSchema = z.enum(["food", "non_food"]);
+
 const itemSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
   description: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   unitOfMeasure: z.string().min(1),
+  grade: gradeSchema.nullable().optional(),
 });
 
 const itemUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
+  grade: gradeSchema.nullable().optional(),
   isActive: z.boolean().optional(),
 });
 

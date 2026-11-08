@@ -15,6 +15,7 @@ import {
   ApiError,
   type Customer,
   type ServiceDefinition,
+  type WorkOrderType,
   type WorkOrderRow,
 } from "../../lib/api";
 import {
@@ -52,6 +53,7 @@ export function WorkOrderQueuePage() {
   const [serviceCode, setServiceCode] = useState("");
   const [title, setTitle] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [woType, setWoType] = useState<WorkOrderType>("regular");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,6 +84,9 @@ export function WorkOrderQueuePage() {
         serviceDefinitionCode: serviceCode,
         title,
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+        // Back-charge WOs never carry a contractId; the form has no contract
+        // field, so it is simply omitted from the payload.
+        woType,
       });
       setNotice(t("mo.woq.msg.workOrderCreated"));
       setTitle("");
@@ -103,7 +108,15 @@ export function WorkOrderQueuePage() {
       header: t("mo.woq.h.number"),
       cell: (row) => <span className="font-medium">{row.workOrder.workOrderNumber}</span>,
     },
-    { header: t("mo.woq.h.work"), cell: (row) => row.workOrder.title },
+    {
+      header: t("mo.woq.h.work"),
+      cell: (row) => (
+        <span className="flex flex-wrap items-center gap-2">
+          {row.workOrder.title}
+          {row.workOrder.woType === "back_charge" ? <Badge>{t("wo.type.backCharge")}</Badge> : null}
+        </span>
+      ),
+    },
     {
       header: t("mo.woq.h.status"),
       cell: (row) => (
@@ -160,6 +173,12 @@ export function WorkOrderQueuePage() {
                   {d.name}
                 </option>
               ))}
+            </Select>
+          </Field>
+          <Field label={t("wo.type.label")}>
+            <Select value={woType} onChange={(e) => setWoType(e.target.value as WorkOrderType)}>
+              <option value="regular">{t("wo.type.regular")}</option>
+              <option value="back_charge">{t("wo.type.backCharge")}</option>
             </Select>
           </Field>
           <Field label={t("mo.woq.f.title")} required>

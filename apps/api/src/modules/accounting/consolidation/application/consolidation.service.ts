@@ -145,6 +145,11 @@ export class ConsolidationService {
       definitionCode: CONSOLIDATION_GROUP_WORKFLOW_CODE,
       entityId: group.id,
       contextData: {
+        // Tenant-level entity: a consolidation perimeter / FSV / elimination spans
+        // Legal Entities and has NO owning Organization Unit or single Legal
+        // Entity, so there is nothing to stamp. The Instance is visible to
+        // tenant-scoped actors, its starter and eligible assignees only
+        // (ADR-0007 amendment 2026-11-08).
         groupCode: group.groupCode,
         reportingCurrency: group.reportingCurrency,
       },
@@ -366,6 +371,7 @@ export class ConsolidationService {
       definitionCode: FSV_VERSION_WORKFLOW_CODE,
       entityId: created.version.id,
       contextData: {
+        // Tenant-level entity, nothing to stamp (see createGroup; ADR-0007 amendment 2026-11-08).
         fsvCode: created.version.fsvCode,
         versionNumber: created.version.versionNumber,
         lineCount: created.lines.length,
@@ -767,6 +773,7 @@ export class ConsolidationService {
       definitionCode: ELIMINATION_WORKFLOW_CODE,
       entityId: elimination.id,
       contextData: {
+        // Tenant-level entity, nothing to stamp (see createGroup; ADR-0007 amendment 2026-11-08).
         groupId: input.groupId,
         periodId: input.periodId,
         amount: elimination.amount,

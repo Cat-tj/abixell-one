@@ -62,11 +62,11 @@ export function LoginPage() {
       </div>
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded border border-line bg-panel p-6 shadow-xs"
+        className="w-full max-w-sm space-y-4 rounded border border-line bg-panel p-5"
       >
         <div className="min-w-0">
           <h1 className="text-lg font-semibold text-ink">{t("login.title")}</h1>
-          <p className="text-sm text-ink-faint">{t("login.subtitle")}</p>
+          <p className="text-sm text-ink-dim">{t("login.subtitle")}</p>
         </div>
 
         {tenantChoice ? (
@@ -91,7 +91,7 @@ export function LoginPage() {
               <input
                 type="email"
                 autoComplete="username"
-                className="mt-1 w-full rounded border border-line px-2 py-1.5"
+                className="mt-1 min-h-[44px] w-full rounded border border-line-strong bg-panel px-2 py-1 text-sm focus:border-accent sm:min-h-[32px]"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -103,7 +103,7 @@ export function LoginPage() {
               <input
                 type="password"
                 autoComplete="current-password"
-                className="mt-1 w-full rounded border border-line px-2 py-1.5"
+                className="mt-1 min-h-[44px] w-full rounded border border-line-strong bg-panel px-2 py-1 text-sm focus:border-accent sm:min-h-[32px]"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -122,7 +122,7 @@ export function LoginPage() {
               setError(null);
             }}
             disabled={loading}
-            className="w-full rounded border border-line px-3 py-2 text-sm font-medium text-ink-dim disabled:opacity-50"
+            className="min-h-[44px] w-full rounded border border-line-strong px-3 py-1.5 text-sm font-medium text-ink-dim hover:bg-panel-3 disabled:opacity-50 sm:min-h-[32px]"
           >
             {t("login.otherEmail")}
           </button>
@@ -130,7 +130,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded bg-accent px-3 py-2 text-sm font-medium text-accent-on disabled:opacity-50"
+            className="min-h-[44px] w-full rounded bg-accent px-3 py-1.5 text-sm font-semibold text-accent-on hover:bg-accent-line disabled:opacity-50 sm:min-h-[32px]"
           >
             {loading ? t("login.submitting") : t("login.submit")}
           </button>

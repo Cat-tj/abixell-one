@@ -279,6 +279,9 @@ export const WINDOW_RULES: WindowRule[] = [
   // allocation — maps to the transactions Window alongside journal writes.
   { method: "*", apiPath: "/accounting/open-items", windowCode: "route:/finance/transactions" },
   { method: "*", apiPath: "/accounting/allocations", windowCode: "route:/finance/transactions" },
+  // Tahap B8 — settling a fully-allocated invoice is money movement, same
+  // family as open-item allocation above.
+  { method: "POST", apiPath: "/accounting/invoices/:id/settle", windowCode: "route:/finance/transactions" },
   // Budget control (Wave A6 WP-FIN-A6-03). Baseline/policy definition is
   // configuration; consumption and version actions are money movement.
   { method: "*", apiPath: "/accounting/budget-consumptions", windowCode: "route:/finance/transactions" },
@@ -407,6 +410,7 @@ export const WINDOW_RULES: WindowRule[] = [
   // `/integration/endpoints` the Integration Boundary card, both rendered by
   // `SharedServicesPanel` inside `/settings`.
   { method: "*", apiPath: "/integration/endpoints", windowCode: "route:/settings" },
+  { method: "*", apiPath: "/integration/partner-credentials", windowCode: "route:/settings" },
   { method: "*", apiPath: "/notifications/templates", windowCode: "route:/settings" },
   { method: "*", apiPath: "/notifications/:id/read", windowCode: "route:/settings" },
   { method: "*", apiPath: "/scheduler/jobs", windowCode: "route:/settings" },

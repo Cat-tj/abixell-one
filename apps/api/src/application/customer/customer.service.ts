@@ -121,15 +121,13 @@ export class CustomerService {
     const assignments = await this.rbac.getAssignments(actor.userId);
     if (assignments.some((a) => a.scopeType === "tenant")) return all;
 
-    const filtered: Customer[] = [];
-    for (const customer of all) {
-      const covered = await this.rbac.isCustomerContextScopeCoveredByAssignments(assignments, {
+    const matches = await this.rbac.buildCustomerContextScopeMatcher(actor.tenantId, assignments);
+    return all.filter((customer) =>
+      matches({
         customerId: customer.id,
         ownerOrganizationUnitId: customer.ownerOrganizationUnitId,
-      });
-      if (covered) filtered.push(customer);
-    }
-    return filtered;
+      }),
+    );
   }
 
   /**
@@ -146,6 +144,18 @@ export class CustomerService {
     const all = await this.repo.listByTenant(actor.tenantId);
     const assignments = await this.rbac.getAssignments(actor.userId);
     return this.filterCustomerIdsByAssignments(all, assignments);
+  }
+
+  /** Site-scoping of tasks (field officers): the Customer ids covered by the
+   * actor's ACTIVE assignment only (Epic 1 §4.1 C — the same form
+   * `getAuthorized` / `canAccessForDocument` enforce on a single record).
+   * `listScopedCustomerIds` unions EVERY assignment the user holds, so a user
+   * who is petugas@Site-A in one assignment and holds a broader role in
+   * another would see both sites' work while the Site-A role is active. Task
+   * LIST reads use this variant so list and detail agree. */
+  async listScopedCustomerIdsForActor(actor: ActorContext): Promise<string[]> {
+    const all = await this.repo.listByTenant(actor.tenantId);
+    return this.filterCustomerIdsByAssignments(all, this.rbac.getActiveAssignment(actor));
   }
 
   /** Trusted-caller variant that couples the business permission and Customer
@@ -170,15 +180,19 @@ export class CustomerService {
     if (assignments.some((assignment) => assignment.scopeType === "tenant")) {
       return customers.map((customer) => customer.id);
     }
-    const ids: string[] = [];
-    for (const customer of customers) {
-      const covered = await this.rbac.isCustomerContextScopeCoveredByAssignments(assignments, {
-        customerId: customer.id,
-        ownerOrganizationUnitId: customer.ownerOrganizationUnitId,
-      });
-      if (covered) ids.push(customer.id);
-    }
-    return ids;
+    // One read of the tenant's units, then an in-memory match per Customer
+    // (was up to two queries per Customer).
+    const tenantId = customers[0]?.tenantId;
+    if (!tenantId) return [];
+    const matches = await this.rbac.buildCustomerContextScopeMatcher(tenantId, assignments);
+    return customers
+      .filter((customer) =>
+        matches({
+          customerId: customer.id,
+          ownerOrganizationUnitId: customer.ownerOrganizationUnitId,
+        }),
+      )
+      .map((customer) => customer.id);
   }
 
   /** Loads a Customer and enforces both Tenant isolation and Data Scope.
@@ -299,5 +313,29 @@ export class CustomerService {
   async getCustomer(actor: ActorContext, customerId: string): Promise<Customer> {
     await this.rbac.requirePermission(actor, "customer.read");
     return this.getAuthorized(actor, customerId);
+  }
+
+  /**
+   * Wave A8 / ADR-0028 — TRUSTED-CALLER partner read of every Customer in the
+   * tenant. Same posture as `WorkflowService.getEntityStatus`: the caller (the
+   * partner route layer) has ALREADY authorized the machine credential against
+   * `customer.read` from the credential's own permission set, and `tenantId`
+   * MUST come from the authenticated credential row, never from a request
+   * parameter. No human RBAC/Data Scope is evaluated here: a partner credential
+   * has no user, session, or assignment, and is tenant-wide by construction.
+   * Do not call from any session-authenticated route.
+   */
+  async listForPartner(tenantId: string): Promise<Customer[]> {
+    return this.repo.listByTenant(tenantId);
+  }
+
+  /** Trusted-caller single read for the partner surface (see `listForPartner`).
+   * A Customer of another tenant is indistinguishable from a missing one. */
+  async getForPartner(tenantId: string, customerId: string): Promise<Customer> {
+    const customer = await this.repo.findById(customerId);
+    if (!customer || customer.tenantId !== tenantId) {
+      throw new NotFoundError("Customer", customerId);
+    }
+    return customer;
   }
 }

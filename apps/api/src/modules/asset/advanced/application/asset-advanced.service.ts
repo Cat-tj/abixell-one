@@ -206,6 +206,11 @@ export class AssetAdvancedService {
         entityId: workOrder.id,
         contextData: {
           assetId: workOrder.assetId,
+          // ADR-0012: the maintenance order follows its asset's owning unit.
+          organizationUnitId: await this.repo.findAssetOrganizationUnitId(
+            actor.tenantId,
+            workOrder.assetId,
+          ),
           maintenanceType: workOrder.maintenanceType,
           priority: workOrder.priority,
           orderNumber: workOrder.orderNumber,

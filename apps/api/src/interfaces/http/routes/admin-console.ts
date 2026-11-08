@@ -167,7 +167,8 @@ const definitionFields = {
   windows: z.array(windowAccessSchema).max(MAX_WINDOWS),
   includedRoleCodes: z
     .array(z.string().min(1).max(MAX_ROLE_CODE_LENGTH))
-    .max(MAX_INCLUDED_ROLES),
+    .max(MAX_INCLUDED_ROLES)
+    .default([]),
 };
 
 /** Epic 4 open item 1 — operator-authored Role metadata. `.nullable()` because

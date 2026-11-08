@@ -3,7 +3,10 @@ import type {
   RbacRepository,
   UserRoleAssignment,
 } from "../../domain/rbac/rbac.entity.js";
-import type { OrganizationUnitRepository } from "../../domain/organization-unit/organization-unit.entity.js";
+import type {
+  OrganizationUnit,
+  OrganizationUnitRepository,
+} from "../../domain/organization-unit/organization-unit.entity.js";
 import type {
   LegalEntityRepository,
   LifecycleStatus,
@@ -75,6 +78,19 @@ function isOpenForNewWork(status: LifecycleStatus | null | undefined): boolean {
  * routing, notification fan-out and admin review ask about a user in the
  * abstract, and pinning those to one session's choice would be wrong.
  */
+/** Result of `RbacService.buildActiveOrganizationUnitCoverage`: a synchronous
+ * "does the ACTIVE assignment cover this Organization Unit" predicate plus the
+ * covered id set (for pushing the filter into SQL). `tenantWide` means every
+ * unit is covered and `coveredUnitIds` is not populated. */
+export interface ActiveOrganizationUnitCoverage {
+  readonly tenantWide: boolean;
+  covers(unitId: string): boolean;
+  readonly coveredUnitIds: ReadonlySet<string>;
+  /** The Legal Entity the active assignment is scoped to, only when it is
+   * usable (lifecycle `active`, same Tenant); otherwise null. */
+  readonly usableLegalEntityId: string | null;
+}
+
 export class RbacService {
   constructor(
     private readonly repo: RbacRepository,
@@ -328,6 +344,134 @@ export class RbacService {
     }
     const ancestorIds = await this.orgUnits.listAncestorIds(targetOrganizationUnitId);
     return new Set(ancestorIds).has(actor.scopeOrganizationUnitId);
+  }
+
+  /**
+   * Batch form of `isActiveOrganizationUnitScopeCovered` (same rules, same
+   * fail-closed guards) for callers that filter a whole LIST: the tenant's
+   * units are read ONCE and the ADR-0009 ancestor walk runs in memory, so a
+   * list read costs a constant number of queries instead of several per row.
+   * Per-call result for any unit id equals `isActiveOrganizationUnitScopeCovered`.
+   */
+  async buildActiveOrganizationUnitCoverage(
+    actor: ActorContext,
+  ): Promise<ActiveOrganizationUnitCoverage> {
+    const none: ActiveOrganizationUnitCoverage = {
+      tenantWide: false,
+      covers: () => false,
+      coveredUnitIds: new Set<string>(),
+      usableLegalEntityId: null,
+    };
+    if (actor.assignmentId === null) return none;
+    if (actor.scopeType === "tenant") {
+      return {
+        tenantWide: true,
+        covers: () => true,
+        coveredUnitIds: new Set<string>(),
+        usableLegalEntityId: null,
+      };
+    }
+    if (actor.scopeType !== "legal_entity" && actor.scopeType !== "organization_unit") {
+      return none; // a customer-scoped assignment never reaches into the internal structure
+    }
+    const units = await this.orgUnits.listByTenant(actor.tenantId);
+    const byId = new Map(units.map((u) => [u.id, u]));
+    const covered = new Set<string>();
+    let usableLegalEntityId: string | null = null;
+
+    if (actor.scopeType === "legal_entity") {
+      if (actor.scopeLegalEntityId === null) return none;
+      const legalEntity = await this.legalEntities.findById(actor.scopeLegalEntityId);
+      if (
+        legalEntity === null ||
+        legalEntity.tenantId !== actor.tenantId ||
+        !isUsableLifecycleEntity(legalEntity.status)
+      ) {
+        return none;
+      }
+      usableLegalEntityId = actor.scopeLegalEntityId;
+      for (const unit of units) {
+        if (isRetiredLifecycleEntity(unit.status)) continue;
+        if (unit.legalEntityId === actor.scopeLegalEntityId) covered.add(unit.id);
+      }
+    } else {
+      if (actor.scopeOrganizationUnitId === null) return none;
+      const scopeUnit = byId.get(actor.scopeOrganizationUnitId);
+      if (
+        !scopeUnit ||
+        scopeUnit.tenantId !== actor.tenantId ||
+        !isUsableLifecycleEntity(scopeUnit.status)
+      ) {
+        return none;
+      }
+      for (const unit of units) {
+        if (isRetiredLifecycleEntity(unit.status)) continue;
+        // Ancestor walk (target itself included), identical to listAncestorIds.
+        const seen = new Set<string>();
+        let cursor: typeof unit | undefined = unit;
+        while (cursor && !seen.has(cursor.id)) {
+          if (cursor.id === actor.scopeOrganizationUnitId) {
+            covered.add(unit.id);
+            break;
+          }
+          seen.add(cursor.id);
+          cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+        }
+      }
+    }
+    return {
+      tenantWide: false,
+      covers: (unitId) => covered.has(unitId),
+      coveredUnitIds: covered,
+      usableLegalEntityId,
+    };
+  }
+
+  /**
+   * Batch form of `isCustomerContextScopeCoveredByAssignments`: one read of the
+   * tenant's units, then a synchronous matcher, instead of up to two queries
+   * per Customer. Same decisions as the per-row method.
+   */
+  async buildCustomerContextScopeMatcher(
+    tenantId: string,
+    assignments: readonly UserRoleAssignment[],
+  ): Promise<(target: { customerId: string; ownerOrganizationUnitId: string | null }) => boolean> {
+    if (assignments.some((a) => a.scopeType === "tenant")) return () => true;
+    const customerIds = new Set(
+      assignments
+        .filter((a) => a.scopeType === "customer" && a.scopeCustomerId)
+        .map((a) => a.scopeCustomerId as string),
+    );
+    const legalEntityIds = new Set(
+      assignments
+        .filter((a) => a.scopeType === "legal_entity")
+        .map((a) => a.scopeLegalEntityId ?? null),
+    );
+    const orgUnitScopeIds = new Set(
+      assignments
+        .filter((a) => a.scopeType === "organization_unit" && a.scopeOrganizationUnitId)
+        .map((a) => a.scopeOrganizationUnitId as string),
+    );
+    const byId =
+      legalEntityIds.size > 0 || orgUnitScopeIds.size > 0
+        ? new Map((await this.orgUnits.listByTenant(tenantId)).map((u) => [u.id, u]))
+        : new Map<string, OrganizationUnit>();
+    return (target) => {
+      if (customerIds.has(target.customerId)) return true;
+      if (!target.ownerOrganizationUnitId) return false;
+      const owner = byId.get(target.ownerOrganizationUnitId);
+      if (!owner) return false;
+      if (legalEntityIds.has(owner.legalEntityId)) return true;
+      if (orgUnitScopeIds.size === 0) return false;
+      const seen = new Set<string>();
+      let cursor: OrganizationUnit | undefined = owner;
+      while (cursor && !seen.has(cursor.id)) {
+        if (orgUnitScopeIds.has(cursor.id)) return true;
+        seen.add(cursor.id);
+        cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+      }
+      return false;
+    };
   }
 
   /**

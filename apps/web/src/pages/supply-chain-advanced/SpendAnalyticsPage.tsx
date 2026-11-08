@@ -76,7 +76,10 @@ export function SpendAnalyticsPage() {
     }
   }
 
-  const totalSpend = snapshots.reduce((sum, s) => sum + s.totalSpend, 0);
+  // Null for viewers without the price permission; show a dash, not a misleading 0.
+  const totalSpend: number | null = snapshots.some((s) => s.totalSpend === null)
+    ? null
+    : snapshots.reduce((sum, s) => sum + (s.totalSpend ?? 0), 0);
   const totalPOs = snapshots.reduce((sum, s) => sum + s.poCount, 0);
   const totalItems = snapshots.reduce((sum, s) => sum + s.itemsPurchasedCount, 0);
 
@@ -97,11 +100,11 @@ export function SpendAnalyticsPage() {
     },
     {
       header: t("scm.spend.h.avgPoValue"),
-      cell: (r) => <span className="font-mono">{formatMoney(String(r.avgPoValue))}</span>,
+      cell: (r) => <span className="font-mono">{formatMoney(r.avgPoValue)}</span>,
     },
     {
       header: t("scm.spend.h.totalSpend"),
-      cell: (r) => <span className="font-mono font-bold text-slate-900">{formatMoney(String(r.totalSpend))}</span>,
+      cell: (r) => <span className="font-mono font-bold text-slate-900">{formatMoney(r.totalSpend)}</span>,
       mobileRole: "status",
     },
   ];
@@ -138,7 +141,7 @@ export function SpendAnalyticsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card>
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t("scm.spend.t.totalEvaluatedSpend")}</div>
-              <div className="mt-2 text-2xl font-black text-slate-900 font-mono">{formatMoney(String(totalSpend))}</div>
+              <div className="mt-2 text-2xl font-black text-slate-900 font-mono">{formatMoney(totalSpend)}</div>
             </Card>
             <Card>
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t("scm.spend.t.purchaseOrdersAnalyzed")}</div>

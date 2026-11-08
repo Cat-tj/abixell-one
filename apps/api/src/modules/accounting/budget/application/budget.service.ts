@@ -139,7 +139,18 @@ export class BudgetService {
     const { instance } = await this.workflow.startInstance(actor, {
       definitionCode: BUDGET_WORKFLOW_DEFINITION_CODE,
       entityId: version.id,
-      contextData: { budgetId, versionNumber: version.versionNumber, totalAmount: input.totalAmount },
+      contextData: {
+        budgetId,
+        versionNumber: version.versionNumber,
+        totalAmount: input.totalAmount,
+        // The budget always belongs to a Legal Entity; when it is pinned to a
+        // cost center that is placed in an Organization Unit, that unit owns
+        // it (ADR-0012). Both stamps feed read visibility only.
+        legalEntityId: budget.legalEntityId,
+        organizationUnitId: budget.costCenterId
+          ? await this.repo.findCostCenterOrganizationUnitId(actor.tenantId, budget.costCenterId)
+          : null,
+      },
     });
     await this.repo.setVersionWorkflowInstance(actor.tenantId, version.id, instance.id);
 

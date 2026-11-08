@@ -4749,6 +4749,13 @@ export const en = {
   "documents.printoutTitle": "Printouts",
   "documents.printoutDesc": "Generate PDF printouts of records.",
   "documents.printoutComingSoon": "Printout generation is coming soon.",
+  "wo.type.label": "Work order type",
+  "wo.type.regular": "Regular",
+  "wo.type.backCharge": "Back-charge",
+  "grade.label": "Grade",
+  "grade.food": "Food",
+  "grade.nonFood": "Non-food",
+  "grade.unrestricted": "Unrestricted",
 } as const;
 
 export type MessageKey = keyof typeof en;

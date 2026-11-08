@@ -184,8 +184,8 @@ export class PgServiceOperationsRepository implements ServiceOperationsRepositor
       `INSERT INTO work_orders
          (tenant_id, work_order_number, work_request_id, customer_id, contract_id, project_id, site_id,
           service_definition_id, title, description, priority, planned_start_at, planned_end_at, due_at,
-          created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15) RETURNING *`,
+          created_by, updated_by, wo_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16) RETURNING *`,
       [
         input.tenantId,
         input.workOrderNumber,
@@ -202,6 +202,7 @@ export class PgServiceOperationsRepository implements ServiceOperationsRepositor
         input.plannedEndAt ?? null,
         input.dueAt ?? null,
         input.createdBy,
+        input.woType ?? "regular",
       ],
     );
     return toWorkOrder(r.rows[0]);
@@ -214,10 +215,22 @@ export class PgServiceOperationsRepository implements ServiceOperationsRepositor
 
   async listWorkOrders(
     tenantId: string,
-    filter: { customerIds?: string[]; assignedToUserId?: string; siteId?: string },
+    filter: {
+      customerIds?: string[];
+      assignedToUserId?: string;
+      siteId?: string;
+      visibleTo?: { customerIds: string[]; assignedToUserId: string; workflowInstanceIds: string[] };
+    },
   ): Promise<WorkOrder[]> {
     const conditions = [`tenant_id = $1`, `deleted_at IS NULL`];
     const params: unknown[] = [tenantId];
+    if (filter.visibleTo) {
+      params.push(filter.visibleTo.customerIds, filter.visibleTo.assignedToUserId, filter.visibleTo.workflowInstanceIds);
+      const n = params.length;
+      conditions.push(
+        `(customer_id = ANY($${n - 2}::uuid[]) OR assigned_to_user_id = $${n - 1} OR workflow_instance_id = ANY($${n}::uuid[]))`,
+      );
+    }
     if (filter.customerIds) {
       params.push(filter.customerIds);
       conditions.push(`customer_id = ANY($${params.length})`);
@@ -963,6 +976,7 @@ function toWorkOrder(r: QueryResultRow): WorkOrder {
     workRequestId: r.work_request_id,
     customerId: r.customer_id,
     contractId: r.contract_id,
+    woType: r.wo_type ?? "regular",
     projectId: r.project_id,
     siteId: r.site_id,
     serviceDefinitionId: r.service_definition_id,

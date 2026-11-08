@@ -1,16 +1,24 @@
 @import 'tailwindcss';
 
-/* Altora guideline typography: Plus Jakarta Sans for UI, JetBrains Mono for code. */
+/*
+ * Typography: DESIGN.md §4/§7 — neutral system sans for text, system mono for
+ * numbers and codes. No font files are downloaded (family decision is open).
+ */
 :root {
-  --font-ui: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-code: "JetBrains Mono", ui-monospace, monospace;
-  --shadow-card: 0 6px 14px rgba(38, 32, 84, 0.08), 0 1px 2px rgba(38, 32, 84, 0.04);
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-code: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* Depth comes from 1px lines and surface steps, not shadows (DESIGN.md §5).
+     Only floating overlays (dialog, menu, drawer) get a shadow. */
+  --shadow-overlay: 0 8px 24px rgba(10, 14, 22, 0.18), 0 1px 2px rgba(10, 14, 22, 0.12);
 }
 [data-theme="dark"] {
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 @theme {
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+
   --color-ground: var(--bg);
   --color-panel: var(--surface);
   --color-panel-2: var(--surface-2);
@@ -35,13 +43,138 @@
   --color-status-danger-soft: var(--danger-soft);
   --color-status-idle-soft: var(--idle-soft);
 
+  /*
+   * Legacy palette remap. ~900 class uses on not-yet-migrated pages name
+   * Tailwind palette steps (slate-*, red-*, ...). Pointing those steps at the
+   * theme tokens makes every such page follow the cool-neutral palette, the
+   * four status colors and the dark theme without touching the files.
+   */
+  --color-white: var(--surface);
+  --color-slate-50: var(--surface-2);
+  --color-slate-100: var(--surface-3);
+  --color-slate-200: var(--border);
+  --color-slate-300: var(--border-strong);
+  --color-slate-400: var(--text-faint);
+  --color-slate-500: var(--text-faint);
+  --color-slate-600: var(--text-dim);
+  --color-slate-700: var(--text-dim);
+  --color-slate-800: var(--text);
+  --color-slate-900: var(--text);
+  --color-slate-950: var(--text);
+  --color-gray-50: var(--surface-2);
+  --color-gray-100: var(--surface-3);
+  --color-gray-200: var(--border);
+  --color-gray-300: var(--border-strong);
+  --color-gray-400: var(--text-faint);
+  --color-gray-500: var(--text-faint);
+  --color-gray-600: var(--text-dim);
+  --color-gray-700: var(--text-dim);
+  --color-gray-800: var(--text);
+  --color-gray-900: var(--text);
+
+  --color-red-50: var(--danger-soft);
+  --color-red-100: var(--danger-soft);
+  --color-red-200: var(--danger);
+  --color-red-300: var(--danger);
+  --color-red-400: var(--danger);
+  --color-red-500: var(--danger);
+  --color-red-600: var(--danger);
+  --color-red-700: var(--danger);
+  --color-red-800: var(--danger);
+  --color-red-900: var(--danger);
+  --color-rose-50: var(--danger-soft);
+  --color-rose-100: var(--danger-soft);
+  --color-rose-200: var(--danger);
+  --color-rose-300: var(--danger);
+  --color-rose-400: var(--danger);
+  --color-rose-500: var(--danger);
+  --color-rose-600: var(--danger);
+  --color-rose-700: var(--danger);
+  --color-rose-800: var(--danger);
+  --color-rose-900: var(--danger);
+
+  --color-amber-50: var(--warn-soft);
+  --color-amber-100: var(--warn-soft);
+  --color-amber-200: var(--warn);
+  --color-amber-300: var(--warn);
+  --color-amber-400: var(--warn);
+  --color-amber-500: var(--warn);
+  --color-amber-600: var(--warn);
+  --color-amber-700: var(--warn);
+  --color-amber-800: var(--warn);
+  --color-amber-900: var(--warn);
+  --color-yellow-50: var(--warn-soft);
+  --color-yellow-100: var(--warn-soft);
+  --color-yellow-500: var(--warn);
+  --color-yellow-600: var(--warn);
+  --color-yellow-700: var(--warn);
+
+  --color-emerald-50: var(--ok-soft);
+  --color-emerald-100: var(--ok-soft);
+  --color-emerald-200: var(--ok);
+  --color-emerald-300: var(--ok);
+  --color-emerald-400: var(--ok);
+  --color-emerald-500: var(--ok);
+  --color-emerald-600: var(--ok);
+  --color-emerald-700: var(--ok);
+  --color-emerald-800: var(--ok);
+  --color-emerald-900: var(--ok);
+  --color-green-50: var(--ok-soft);
+  --color-green-100: var(--ok-soft);
+  --color-green-500: var(--ok);
+  --color-green-600: var(--ok);
+  --color-green-700: var(--ok);
+
+  --color-blue-50: var(--accent-soft);
+  --color-blue-100: var(--accent-soft);
+  --color-blue-200: var(--accent);
+  --color-blue-300: var(--accent);
+  --color-blue-400: var(--accent);
+  --color-blue-500: var(--accent);
+  --color-blue-600: var(--accent-line);
+  --color-blue-700: var(--accent-line);
+  --color-blue-800: var(--accent-line);
+  --color-indigo-600: var(--accent-line);
+
+  /* Type scale (DESIGN.md §4): body 13px / 1.45, page title 19px. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.45;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.35;
+  --text-xl: 1.1875rem;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.25;
+  --text-3xl: 1.625rem;
+  --text-3xl--line-height: 1.2;
+
+  /* Shape (DESIGN.md §5): one 3px radius everywhere; pills are explicit. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
+  --radius-3xl: 4px;
+
+  /* No decorative shadows; overlays opt in via shadow-lg / shadow-2xl. */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: var(--shadow-overlay);
+  --shadow-xl: var(--shadow-overlay);
+  --shadow-2xl: var(--shadow-overlay);
+
   --height-row: var(--row);
   --height-control: var(--control);
-
   --min-height-row: var(--row);
   --min-height-control: var(--control);
-
-  --radius: var(--radius);
 
   --default-transition-duration: 120ms;
 }
@@ -60,7 +193,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: var(--border);
   }
 }
 
@@ -86,63 +219,62 @@
 :root {
   color-scheme: light;
 
-  /* Altora Office guideline tokens (office.altora.id production CSS). */
-  --bg: #fbfaff;                     /* hsl(264 71% 99%) */
+  /* Values are DESIGN.md §2 verbatim. Cool neutrals, one accent. */
+  --bg: #f2f4f7;
   --surface: #ffffff;
-  --surface-2: #f4f1fd;              /* hsl(258 56% 96%) surface-muted */
-  --surface-3: #ece8fb;              /* one step deeper on the violet ramp */
-  --border: #ece9f5;                 /* hsl(255 32% 93%) */
-  --border-strong: #d5d0ea;
+  --surface-2: #f7f8fa;
+  --surface-3: #eef1f5;
+  --border: #dde2e8;
+  --border-strong: #c3cad3;
 
-  --text: #1a2450;                   /* hsl(223 66% 19%) */
-  --text-dim: #5a6288;               /* hsl(222 19% 44%) */
-  --text-faint: #7d839c;             /* hsl(223 13% 54%) */
+  --text: #171a1f;
+  --text-dim: #4b5361;
+  --text-faint: #606a78;
 
-  --accent: #7c5ce8;                 /* Altora module primary */
-  --accent-line: #5b3fc4;            /* Altora module dark */
-  --accent-soft: rgba(124, 92, 232, 0.1);
+  --accent: #4a5be8;
+  --accent-line: #3946c7;            /* hover / pressed */
+  --accent-soft: rgba(74, 91, 232, 0.1);
   --accent-on: #ffffff;
 
-  --ok: #12a374;                     /* Altora success */
-  --warn: #b78311;                   /* Altora warning (darkened for text contrast) */
-  --danger: #d64550;                 /* Altora error (355 66% 55%) */
-  --idle: #6b7392;
+  --ok: #0f7a4a;
+  --warn: #8a5a00;
+  --danger: #b32b22;
+  --idle: #55606e;
 
-  --ok-soft: #e3f4ec;                /* Altora success-light */
-  --warn-soft: #fbf0db;              /* Altora warning-light */
-  --danger-soft: #fce8ea;
-  --idle-soft: rgba(107, 115, 146, 0.1);
+  --ok-soft: rgba(15, 122, 74, 0.1);
+  --warn-soft: rgba(138, 90, 0, 0.11);
+  --danger-soft: rgba(179, 43, 34, 0.09);
+  --idle-soft: rgba(85, 96, 110, 0.1);
 
-  /* Density and shape — Altora uses a soft 10px radius and a card shadow. */
+  /* Density and shape (DESIGN.md §3, §5). */
   --row: 32px;
   --control: 28px;
-  --radius: 10px;
+  --radius: 3px;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Altora dark theme values. */
-  --bg: #0d0e16;                     /* hsl(232 37% 8%) */
-  --surface: #171925;                /* hsl(230 34% 13%) */
-  --surface-2: #1f2130;              /* hsl(231 33% 17%) */
-  --surface-3: #272a3c;
-  --border: #2b2e42;                 /* hsl(230 28% 21%) */
-  --border-strong: #3d4160;
+  --bg: #14161a;
+  --surface: #1a1d22;
+  --surface-2: #20242b;
+  --surface-3: #262b33;
+  --border: #2a2f37;
+  --border-strong: #3a414c;
 
-  --text: #eef0fa;                   /* hsl(228 48% 94%) */
-  --text-dim: #aab0cc;               /* hsl(226 20% 70%) */
-  --text-faint: #9297b0;
+  --text: #e7eaf0;
+  --text-dim: #a9b2bf;
+  --text-faint: #8a93a1;
 
-  --accent: #9d86f5;                 /* Altora dark module primary */
-  --accent-line: #c9bbfa;            /* Altora dark module dark (lighter) */
-  --accent-soft: rgba(157, 134, 245, 0.14);
-  --accent-on: #ffffff;
+  --accent: #6b7cff;
+  --accent-line: #8794ff;
+  --accent-soft: rgba(107, 124, 255, 0.16);
+  --accent-on: #0e1017;
 
-  --ok: #34d399;
-  --warn: #f5b13d;                   /* Altora dark warning (245 177 61) */
-  --danger: #f7727d;
-  --idle: #9297b0;
+  --ok: #35c08a;
+  --warn: #e0a028;
+  --danger: #f2685f;
+  --idle: #8b93a1;
 
   --ok-soft: rgba(53, 192, 138, 0.13);
   --warn-soft: rgba(224, 160, 40, 0.13);
@@ -153,11 +285,59 @@
 /*
  * A ground and ink on the document itself, so a page that has not migrated to
  * tokens yet still sits on the right ground instead of showing the browser
- * default. Text and background are always set together: setting one without
- * the other is how a dark ground ends up with black text.
+ * default. Text and background are always set together.
  */
+html {
+  -webkit-text-size-adjust: 100%;
+}
 body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers line up row to row, everywhere a figure is read or compared. */
+td,
+th,
+code,
+kbd,
+samp,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard focus is always visible (DESIGN.md §5): 2px accent ring. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Tailwind's bare `rounded` is a fixed 0.25rem; pin it to the one radius. */
+.rounded {
+  border-radius: var(--radius);
 }

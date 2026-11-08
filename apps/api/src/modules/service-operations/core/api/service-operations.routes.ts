@@ -47,6 +47,7 @@ const convertSchema = scheduleSchema.extend({ title: z.string().min(1).optional(
 const workOrderSchema = scheduleSchema.extend({
   customerId: z.string().uuid(),
   contractId: z.string().uuid().nullable().optional(),
+  woType: z.enum(["regular", "back_charge"]).optional(),
   projectId: z.string().uuid().nullable().optional(),
   siteId: z.string().uuid().nullable().optional(),
   serviceDefinitionCode: z.string().min(1),

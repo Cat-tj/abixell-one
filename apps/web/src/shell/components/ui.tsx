@@ -29,7 +29,7 @@ import { useT } from "../../i18n/LocaleProvider";
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-on font-semibold hover:bg-accent-line shadow-[0_6px_14px_-6px_rgba(124,92,232,0.7)] disabled:opacity-50",
+  primary: "bg-accent text-accent-on font-semibold hover:bg-accent-line disabled:opacity-50",
   secondary:
     "border border-line-strong bg-panel text-ink-dim hover:bg-panel-3 hover:text-ink disabled:opacity-50",
   ghost: "text-ink-dim hover:bg-panel-2 hover:text-ink disabled:opacity-50",
@@ -42,7 +42,7 @@ export const Button = forwardRef<
   return (
     <button
       ref={ref}
-      className={`inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-ground sm:min-h-[36px] ${BUTTON_VARIANTS[variant]} ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 whitespace-nowrap rounded px-3 py-1 text-sm font-medium transition-colors sm:min-h-[28px] ${BUTTON_VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {children}
@@ -59,7 +59,7 @@ export function Card({
 }: PropsWithChildren<{ className?: string; onClick?: () => void }>) {
   return (
     <section
-      className={`rounded border border-line bg-panel p-3 sm:p-4 lg:p-6 ${className}`}
+      className={`rounded border border-line bg-panel p-3 sm:p-4 ${className}`}
       onClick={onClick}
     >
       {children}
@@ -79,9 +79,9 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h1 className="text-xl font-semibold text-ink">{title}</h1>
+        <h1 className="text-xl font-semibold tracking-[-0.005em] text-ink">{title}</h1>
         {subtitle && <p className="mt-0.5 text-sm text-ink-dim">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">{actions}</div>}
@@ -148,7 +148,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded border border-dashed border-line-strong bg-panel-2 px-6 py-12 text-center">
+    <div className="flex flex-col items-center justify-center rounded border border-dashed border-line-strong bg-panel-2 px-6 py-8 text-center">
       <h2 className="text-sm font-semibold text-ink">{title}</h2>
       {description && (
         <p className="mt-1 max-w-md text-sm text-ink-dim">{description}</p>
@@ -204,7 +204,7 @@ export function Alert({
 /* ------------------------------------------------- Form primitives (1C.2) */
 
 const CONTROL_CLASS =
-  "mt-1 min-h-[44px] w-full rounded border border-line-strong bg-panel-2 px-2 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-hidden focus:ring-2 focus:ring-accent-soft disabled:opacity-60 sm:min-h-[36px]";
+  "mt-1 min-h-[44px] w-full rounded border border-line-strong bg-panel px-2 py-1 text-sm text-ink placeholder:text-ink-faint focus:border-accent disabled:bg-panel-2 disabled:opacity-60 sm:min-h-[28px]";
 
 /** Labelled field wrapper — pairs a label with a control and optional hint. */
 export function Field({
@@ -280,12 +280,12 @@ export function Toggle({
         aria-label={label}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-ground disabled:opacity-50 ${
+        className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors disabled:opacity-50 ${
           checked ? "border-accent bg-accent" : "border-line-strong bg-panel-3"
         }`}
       >
         <span
-          className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-panel shadow transition-transform ${
+          className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-panel transition-transform ${
             checked ? "translate-x-5" : "translate-x-0.5"
           }`}
         />
@@ -339,7 +339,7 @@ export function DataTable<T>({
       {/* Mobile (Checkpoint 1C.7): stacked cards instead of a sideways-scrolling
           table, so dense operational/management tables stay usable on a phone.
           Cards follow the 44px touch-target rule, not the 32px desktop density. */}
-      <ul className={`space-y-3 ${cardVisibility}`}>
+      <ul className={`space-y-2 ${cardVisibility}`}>
         {rows.map((row) => {
           const titleColumns = columns.filter((column) => column.mobileRole === "title");
           const statusColumns = columns.filter((column) => column.mobileRole === "status");
@@ -386,15 +386,15 @@ export function DataTable<T>({
       </ul>
 
       {/* Desktop/tablet: the full table (still scrolls inside its own box). */}
-      <div className={`${tableVisibility} overflow-x-auto rounded border border-line`}>
-        <table className="min-w-full border-collapse text-sm">
+      <div className={`${tableVisibility} overflow-x-auto rounded border border-line bg-panel`}>
+        <table className="min-w-full border-collapse text-sm tabular-nums">
           <thead>
             <tr className="border-b border-line-strong">
               {columns.map((column, index) => (
                 <th
                   key={index}
                   scope="col"
-                  className={`px-3 pb-2 pt-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint ${column.className ?? ""}`}
+                  className={`h-8 whitespace-nowrap bg-panel-2 px-2.5 ${/\btext-(right|center)\b/.test(column.className ?? "") ? "" : "text-left"} text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint ${column.className ?? ""}`}
                 >
                   {column.header}
                 </th>
@@ -411,7 +411,7 @@ export function DataTable<T>({
                 {columns.map((column, index) => (
                   <td
                     key={index}
-                    className={`min-h-row px-3 align-middle text-ink ${column.className ?? ""}`}
+                    className={`h-8 px-2.5 py-1 align-middle text-ink ${column.className ?? ""}`}
                   >
                     {column.cell(row)}
                   </td>

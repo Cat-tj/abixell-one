@@ -60,3 +60,59 @@ step, which is assigned to whoever started the Instance.
 - Nothing about the schema needs to change if load-balancing or explicit
   claiming is added later — it's new logic layered on top of the same
   `workflow_instance_assignments` shape, not a redesign.
+
+## Amendment 2026-11-08 — Instance reads are filtered by the active Data Scope (site-scoping)
+
+- **Status of this amendment:** PENDING FOUNDER CONFIRMATION. Implemented to
+  unblock site-scoping of field-officer tasks; it applies existing mechanisms
+  (ADR-0009 hierarchical walk, ADR-0011 customer scope, ADR-0012
+  parent-follows-entity) and does not change Data Scope semantics. Revert by
+  removing the visibility filter in `WorkflowService` if not confirmed.
+
+**What changed.** `GET /workflow/instances`, `GET /workflow/instances/:id` and
+`GET /workflow/instances/:id/history` were Tenant-wide for any holder of
+`workflow.instance.read`. For an actor whose ACTIVE assignment is narrower than
+the Tenant (Organization Unit / Legal Entity / Customer scope) an Instance is now
+visible only when one of these holds; otherwise the single reads answer 404 and
+the list omits it. Tenant-scoped actors are unchanged.
+
+1. **Owning unit** - `contextData.organizationUnitId` (set by the business
+   module from the parent entity's owning unit, ADR-0012) is covered by the
+   active scope (ADR-0009: scope unit and every descendant).
+2. **Legal Entity stamp** - `contextData.legalEntityId` equals the active,
+   usable Legal Entity scope. Used by entities that belong to a Legal Entity but
+   to no Organization Unit (tax rule versions; budget versions).
+3. **Customer stamp** - `contextData.customerId` equals the active customer
+   scope (ADR-0011), so a customer-scoped reader who holds
+   `workflow.instance.read` can read the Instance of a Work Order/Complaint of
+   their own Customer.
+4. **Exceptions (always visible):** the actor started the Instance, or is a named
+   or Role+Scope-eligible assignee on it (any assignment status), evaluated
+   against the ACTIVE assignment only (same rule as `assertEligible`).
+
+**Unstamped Instances.** Tenant-level entities have no owning unit and no Legal
+Entity (consolidation groups, FSV versions, eliminations) and the Supply Chain
+supplier evaluations and supplier contracts (guarded by tenant-level scope). They
+stay visible to tenant-scoped actors, their starter and eligible assignees only.
+A job posting without an organization unit, a tenant-level warehouse, and a
+vendor invoice received into one are likewise unstamped (`organizationUnitId`
+null) and behave the same way. HSE records/permits, leave/overtime/performance
+requests (employee's unit), job postings, stock transfers (source warehouse),
+opnames, disposals (warehouse or explicit unit), vendor invoices (receiving
+warehouse) and payment batches (batch unit) are stamped from their parent.
+
+**Start-time validation.** `contextData` is caller-supplied on
+`POST /workflow/instances` and now drives visibility, so for a non-tenant actor
+that route (`WorkflowService.startInstanceFromRequest`) rejects (403) an
+`organizationUnitId` not covered by the active scope, a `legalEntityId` other
+than the actor's own Legal Entity scope and a `customerId` other than the actor's
+own customer scope; a non-string `organizationUnitId` is a 400. Internal business
+modules call `startInstance` directly as trusted callers deriving the stamps from
+the entity and are not subject to it.
+
+**Work Orders and My Tasks.** The Work Order list and `/my/dashboard` use the
+same predicate as detail (assigned executor, OR Customer Data Scope, OR
+workflow-associated), and `listMyAssignments` matches Role+Scope against the
+active assignment. All are computed from one read of the tenant's units and one
+association query per request (no per-row queries). Read sub-resources of an
+out-of-scope Work Order answer 404 like detail; mutations keep 403.

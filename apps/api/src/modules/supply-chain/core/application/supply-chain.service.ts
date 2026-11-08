@@ -5,6 +5,8 @@ import {
   NotFoundError,
   ValidationError,
 } from "../../../../domain/shared-kernel/errors.js";
+import type { PoolClient } from "pg";
+import type { ItemStockExposurePort } from "../../ports/item-stock-exposure-port.js";
 import type { AuditService } from "../../../../application/audit/audit.service.js";
 import type { RbacService } from "../../../../application/rbac/rbac.service.js";
 import type { EventBus } from "../../../../application/event/event-bus.js";
@@ -22,6 +24,7 @@ import type {
   SupplyChainRepository,
 } from "../domain/supply-chain.entity.js";
 import { purchaseOrderState } from "../domain/supply-chain.entity.js";
+import type { ScmGrade } from "../domain/supply-chain.entity.js";
 
 /** Tenant Configuration codes this module expects. */
 export const PURCHASE_REQUEST_NUMBERING_CODE = "purchase_request";
@@ -81,6 +84,8 @@ export class SupplyChainService {
     private readonly audit: AuditService,
     private readonly rbac: RbacService,
     private readonly eventBus: EventBus,
+    /** WMS stock exposure ACL (optional so unit tests may omit it). */
+    private readonly itemStockExposure?: ItemStockExposurePort,
   ) {}
 
   // ===================================================================
@@ -89,7 +94,14 @@ export class SupplyChainService {
 
   async createItem(
     actor: ActorContext,
-    input: { code: string; name: string; description?: string | null; category?: string | null; unitOfMeasure: string },
+    input: {
+      code: string;
+      name: string;
+      description?: string | null;
+      category?: string | null;
+      unitOfMeasure: string;
+      grade?: ScmGrade | null;
+    },
   ): Promise<Item> {
     await this.rbac.requirePermission(actor, "supply_chain.configure");
     const existing = await this.repo.findItemByCode(actor.tenantId, input.code);
@@ -102,6 +114,7 @@ export class SupplyChainService {
       description: input.description ?? null,
       category: input.category ?? null,
       unitOfMeasure: input.unitOfMeasure,
+      grade: input.grade ?? null,
       createdBy: actor.userId,
     });
     await this.audit.record({
@@ -140,11 +153,39 @@ export class SupplyChainService {
   async updateItem(
     actor: ActorContext,
     code: string,
-    input: { name?: string; description?: string | null; category?: string | null; isActive?: boolean },
+    input: {
+      name?: string;
+      description?: string | null;
+      category?: string | null;
+      grade?: ScmGrade | null;
+      isActive?: boolean;
+    },
   ): Promise<Item> {
     await this.rbac.requirePermission(actor, "supply_chain.configure");
     const item = await this.getItemByCodeOrThrow(actor, code);
-    const updated = await this.repo.updateItem(item.id, input, actor.userId);
+    // Re-grading must not strand on-hand stock inside a warehouse of the other
+    // grade (every movement out of it would then fail GRADE_MISMATCH). The check
+    // runs under the item row lock, via the WMS ACL port.
+    const newGrade = input.grade;
+    const guard =
+      newGrade && newGrade !== item.grade && this.itemStockExposure
+        ? async (db: Pick<PoolClient, "query">) => {
+            const conflicts = await this.itemStockExposure!.listConflictingWarehouses(
+              db,
+              actor.tenantId,
+              item.id,
+              newGrade,
+            );
+            if (conflicts.length > 0) {
+              throw new ConflictError(
+                `Cannot set item ${item.code} to ${newGrade}: it has stock in ${conflicts[0]!.warehouseGrade} warehouse ${conflicts[0]!.warehouseCode}`,
+                "GRADE_MISMATCH",
+              );
+            }
+          }
+        : undefined;
+    const updated = await this.repo.updateItem(item.id, input, actor.userId, guard);
+    if (!updated) throw new NotFoundError("Item", code);
     await this.audit.record({
       tenantId: actor.tenantId,
       actorUserId: actor.userId,

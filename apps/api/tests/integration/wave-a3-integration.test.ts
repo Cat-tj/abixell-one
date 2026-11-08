@@ -610,6 +610,17 @@ describe("Wave A3 — Service Operations & Asset Advanced Integration Suite", ()
       expect(wo.completedAt).toBeNull();
       expect(wo.verifiedAt).toBeNull();
 
+      // Site-scoping (ADR-0007 amendment 2026-11-08): the Instance carries the
+      // asset's owning Organization Unit so unit-scoped managers keep seeing it.
+      const stamped = await pool.query(
+        `SELECT wi.context_data, a.organization_unit_id
+           FROM workflow_instances wi, assets a
+          WHERE wi.id = $1 AND a.id = $2`,
+        [wo.workflowInstanceId, assetId],
+      );
+      expect(stamped.rows[0].context_data).toHaveProperty("organizationUnitId");
+      expect(stamped.rows[0].context_data.organizationUnitId).toBe(stamped.rows[0].organization_unit_id ?? null);
+
       // Detail view proves status is computed dynamically from Workflow Service
       const detailRes = await get(`/assets/work-orders/${maintenanceWorkOrderId}`, adminToken);
       expect(detailRes.statusCode).toBe(200);

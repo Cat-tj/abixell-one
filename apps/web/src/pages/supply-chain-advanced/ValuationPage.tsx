@@ -168,8 +168,8 @@ export function ValuationPage() {
     { header: t("scm.val.h.warehouse"), cell: (r) => r.warehouseId ? (whMap.get(r.warehouseId)?.name || r.warehouseId) : "Global" },
     { header: t("scm.val.h.originalQty"), cell: (r) => <span className="font-mono">{r.originalQuantity}</span> },
     { header: t("scm.val.h.remainingQty"), cell: (r) => <span className="font-mono font-bold text-blue-600">{r.remainingQuantity}</span> },
-    { header: t("scm.val.h.unitCostIdr"), cell: (r) => <span className="font-mono">{formatMoney(String(r.effectiveUnitCost))}</span> },
-    { header: t("scm.val.h.totalRemainingValue"), cell: (r) => <span className="font-mono font-semibold text-emerald-600">{formatMoney(String(r.totalValue))}</span>, mobileRole: "status" },
+    { header: t("scm.val.h.unitCostIdr"), cell: (r) => <span className="font-mono">{formatMoney(r.effectiveUnitCost)}</span> },
+    { header: t("scm.val.h.totalRemainingValue"), cell: (r) => <span className="font-mono font-semibold text-emerald-600">{formatMoney(r.totalValue)}</span>, mobileRole: "status" },
     { header: t("scm.val.h.receivedDate"), cell: (r) => formatDateShort(r.receivedDate) },
   ];
 
@@ -178,7 +178,7 @@ export function ValuationPage() {
     { header: t("scm.val.h.purchaseOrder"), cell: (r) => poMap.get(r.purchaseOrderId)?.orderNumber || r.purchaseOrderId },
     { header: t("scm.val.h.costType"), cell: (r) => r.costType },
     { header: t("scm.val.h.method"), cell: (r) => label(r.allocationMethod) },
-    { header: t("scm.val.h.amount"), cell: (r) => <span className="font-mono font-bold text-slate-800">{formatMoney(String(r.amount))}</span> },
+    { header: t("scm.val.h.amount"), cell: (r) => <span className="font-mono font-bold text-slate-800">{formatMoney(r.amount)}</span> },
     { header: t("scm.val.h.status"), cell: (r) => <StatusPill tone={r.status === "applied" ? "success" : "warning"}>{label(r.status)}</StatusPill>, mobileRole: "status" },
     {
       header: t("scm.val.h.actions"),
@@ -272,14 +272,14 @@ export function ValuationPage() {
               <div className="space-y-4">
                 <div className="flex gap-4 text-sm">
                   <div><strong>{t("scm.val.f.status")}</strong> <StatusPill tone={selectedLandedCost.landedCost.status === "applied" ? "success" : "warning"}>{label(selectedLandedCost.landedCost.status)}</StatusPill></div>
-                  <div><strong>{t("scm.val.f.totalCost")}</strong> <span className="font-mono font-bold">{formatMoney(String(selectedLandedCost.landedCost.amount))}</span></div>
+                  <div><strong>{t("scm.val.f.totalCost")}</strong> <span className="font-mono font-bold">{formatMoney(selectedLandedCost.landedCost.amount)}</span></div>
                   <div><strong>{t("scm.val.f.method")}</strong> {label(selectedLandedCost.landedCost.allocationMethod)}</div>
                 </div>
                 <DataTable
                   columns={[
                     { header: t("scm.val.h.item"), cell: (r) => itemMap.get(r.itemId)?.name || r.itemId, mobileRole: "title" },
-                    { header: t("scm.val.h.allocatedAmount"), cell: (r) => <span className="font-mono font-bold text-amber-600">+{formatMoney(String(r.allocatedAmount))}</span> },
-                    { header: t("scm.val.h.costPerUnitAdded"), cell: (r) => <span className="font-mono font-bold text-emerald-600">+{formatMoney(String(r.costPerUnitAdded))}</span>, mobileRole: "status" },
+                    { header: t("scm.val.h.allocatedAmount"), cell: (r) => <span className="font-mono font-bold text-amber-600">+{formatMoney(r.allocatedAmount)}</span> },
+                    { header: t("scm.val.h.costPerUnitAdded"), cell: (r) => <span className="font-mono font-bold text-emerald-600">+{formatMoney(r.costPerUnitAdded)}</span>, mobileRole: "status" },
                   ]}
                   rows={selectedLandedCost.allocations}
                   keyOf={(r) => r.id}

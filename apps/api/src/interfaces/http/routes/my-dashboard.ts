@@ -61,6 +61,18 @@ export function registerMyDashboardRoutes(app: FastifyInstance, container: Conta
       }
     }
 
+    // Pending workflow tasks the caller is eligible for. Role+Scope queue match
+    // against the ACTIVE assignment (ADR-0007/0009), so a field officer scoped
+    // to one Site counts only that Site's tasks.
+    if (permissions.has("workflow.instance.read")) {
+      try {
+        const tasks = await container.workflow.listMyAssignments(actor);
+        blocks.myTasks = { pending: tasks.length };
+      } catch {
+        /* omit */
+      }
+    }
+
     if (permissions.has("service_operations.read")) {
       try {
         const orders = await container.serviceOperations.listWorkOrders(actor);

@@ -212,7 +212,7 @@ export function ProcurementPage() {
 
   const bidColumns: Column<ScmSupplierBid>[] = [
     { header: t("scm.proc.h.supplier"), cell: (b) => suppMap.get(b.supplierId)?.name || b.supplierId, mobileRole: "title" },
-    { header: t("scm.proc.h.quotedTotal"), cell: (b) => <span className="font-mono font-bold text-slate-800">{formatMoney(String(b.totalAmount))}</span> },
+    { header: t("scm.proc.h.quotedTotal"), cell: (b) => <span className="font-mono font-bold text-slate-800">{formatMoney(b.totalAmount)}</span> },
     { header: t("scm.proc.h.leadTime"), cell: (b) => `${b.leadTimeDays ?? "—"} days` },
     { header: t("scm.proc.h.finalScore"), cell: (b) => b.finalScore != null ? <Badge>{b.finalScore} / 100</Badge> : "—" },
     { header: t("scm.proc.h.status"), cell: (b) => <StatusPill tone={b.status === "awarded" ? "success" : b.status === "rejected" ? "danger" : "neutral"}>{label(b.status)}</StatusPill>, mobileRole: "status" },

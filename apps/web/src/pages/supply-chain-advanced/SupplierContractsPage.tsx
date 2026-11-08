@@ -190,8 +190,8 @@ export function SupplierContractsPage() {
     { header: t("scm.supplier.h.supplier"), cell: (c) => suppMap.get(c.supplierId)?.name || c.supplierId },
     { header: t("scm.supplier.h.contractTitle"), cell: (c) => c.title },
     { header: t("scm.supplier.h.validityPeriod"), cell: (c) => `${formatDateShort(c.startDate)} – ${formatDateShort(c.endDate)}` },
-    { header: t("scm.supplier.h.committedAmount"), cell: (c) => <span className="font-mono font-bold text-slate-800">{formatMoney(String(c.committedAmount))}</span> },
-    { header: t("scm.supplier.h.consumedSpend"), cell: (c) => <span className="font-mono text-emerald-600">{formatMoney(String(c.spentAmount))}</span> },
+    { header: t("scm.supplier.h.committedAmount"), cell: (c) => <span className="font-mono font-bold text-slate-800">{formatMoney(c.committedAmount)}</span> },
+    { header: t("scm.supplier.h.consumedSpend"), cell: (c) => <span className="font-mono text-emerald-600">{formatMoney(c.spentAmount)}</span> },
     { header: t("scm.supplier.h.status"), cell: (c) => <StatusPill tone={c.status === "active" ? "success" : c.status === "draft" ? "warning" : "neutral"}>{label(c.status)}</StatusPill>, mobileRole: "status" },
     {
       header: t("scm.supplier.h.actions"),
