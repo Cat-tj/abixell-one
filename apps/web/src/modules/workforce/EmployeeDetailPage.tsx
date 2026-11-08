@@ -149,7 +149,7 @@ export function EmployeeDetailPage() {
         </div>
         <div className="mt-3">
           <Button
-            disabled={busy}
+            disabled={busy || !fullName.trim()}
             onClick={() =>
               run(
                 () =>

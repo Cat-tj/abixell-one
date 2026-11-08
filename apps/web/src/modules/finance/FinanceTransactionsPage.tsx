@@ -255,7 +255,7 @@ export function FinanceTransactionsPage() {
             />
           </Field>
           <div className="flex items-end">
-            <Button disabled={busy || !amountValid || !accountCode || !categoryCode} onClick={() => void record()}>
+            <Button disabled={busy || !amountValid || !accountCode || !categoryCode || !transactionDate} onClick={() => void record()}>
               {t("finTx.record")}
             </Button>
           </div>

@@ -865,6 +865,47 @@ async function main() {
     );
   }
 
+  // Sales pipeline catalogs. Stages, sources and quotation units are tenant
+  // reference data; without them the Sales page cannot create anything.
+  const salesCatalogs: Array<[string, Array<[string, string]>]> = [
+    [
+      "sales_opportunity_stage",
+      [
+        ["lead", "Lead"],
+        ["qualified", "Qualified"],
+        ["proposal", "Proposal"],
+        ["negotiation", "Negotiation"],
+      ],
+    ],
+    [
+      "sales_opportunity_source",
+      [
+        ["referral", "Referral"],
+        ["tender", "Tender"],
+        ["existing_client", "Existing client"],
+      ],
+    ],
+    [
+      "sales_unit_of_measure",
+      [
+        ["pax", "Pax"],
+        ["meal", "Meal"],
+        ["month", "Month"],
+      ],
+    ],
+  ];
+  for (const [typeCode, items] of salesCatalogs) {
+    const type = (await pool.query(`SELECT id FROM reference_data_types WHERE code = $1`, [typeCode])).rows[0];
+    if (!type) continue;
+    for (const [index, [code, label]] of items.entries()) {
+      await pool.query(
+        `INSERT INTO tenant_reference_data_items (tenant_id, reference_data_type_id, code, label, sort_order)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [tenant.id, type.id, code, label, index + 1],
+      );
+    }
+  }
+
   // Numbering: CMP-{YYYY}-{SEQ:5} — tenant-configurable Complaint numbering,
   // exactly like `demo_ticket` above (Checkpoint 0C mechanism, no new code).
   await pool.query(
@@ -1093,6 +1134,60 @@ async function main() {
     [tenant.id],
   );
 
+  // Every other document number the modules generate. Without a sequence the
+  // create call fails with "NumberingSequence <code> not found", so the demo
+  // tenant gets one per code (tenants can still change the pattern later).
+  const moduleNumbering: Array<[string, string]> = [
+    ["asset", "AST-{YYYY}-{SEQ:5}"],
+    ["asset_maintenance_work_order", "AMWO-{YYYY}-{SEQ:5}"],
+    ["capa_action", "CAPA-{YYYY}-{SEQ:5}"],
+    ["complaint_ticket", "TKT-{YYYY}-{SEQ:5}"],
+    ["employee_number", "EMP-{YYYY}-{SEQ:5}"],
+    ["finance_transaction", "FTX-{YYYY}-{SEQ:5}"],
+    ["hse_capa", "HCAPA-{YYYY}-{SEQ:5}"],
+    ["hse_permit", "PTW-{YYYY}-{SEQ:5}"],
+    ["hse_record", "HSE-{YYYY}-{SEQ:5}"],
+    ["purchase_order", "PO-{YYYY}-{SEQ:5}"],
+    ["purchase_request", "PR-{YYYY}-{SEQ:5}"],
+    ["sales_opportunity", "OPP-{YYYY}-{SEQ:5}"],
+    ["sales_quotation", "QTN-{YYYY}-{SEQ:5}"],
+    ["scm_consignment_settlement", "CSG-{YYYY}-{SEQ:5}"],
+    ["scm_inspection", "INSP-{YYYY}-{SEQ:5}"],
+    ["scm_inventory_disposal", "DSP-{YYYY}-{SEQ:5}"],
+    ["scm_item_batch", "BAT-{YYYY}-{SEQ:5}"],
+    ["scm_landed_cost", "LC-{YYYY}-{SEQ:5}"],
+    ["scm_payment_batch", "PAYB-{YYYY}-{SEQ:5}"],
+    ["scm_receipt_reversal", "RREV-{YYYY}-{SEQ:5}"],
+    ["scm_receiving_record", "GRN-{YYYY}-{SEQ:5}"],
+    ["scm_replacement_delivery", "RPL-{YYYY}-{SEQ:5}"],
+    ["scm_return_to_vendor", "RTV-{YYYY}-{SEQ:5}"],
+    ["scm_rfq", "RFQ-{YYYY}-{SEQ:5}"],
+    ["scm_service_acceptance", "SAC-{YYYY}-{SEQ:5}"],
+    ["scm_stock_opname", "OPN-{YYYY}-{SEQ:5}"],
+    ["scm_stock_transfer", "TRF-{YYYY}-{SEQ:5}"],
+    ["scm_supplier_bid", "BID-{YYYY}-{SEQ:5}"],
+    ["scm_supplier_contract", "SCT-{YYYY}-{SEQ:5}"],
+    ["scm_supplier_evaluation", "SEV-{YYYY}-{SEQ:5}"],
+    ["scm_vendor_invoice", "VINV-{YYYY}-{SEQ:5}"],
+    ["scm_warehouse_task", "WHT-{YYYY}-{SEQ:5}"],
+    ["service_optimization_run", "OPT-{YYYY}-{SEQ:5}"],
+    ["service_request", "SR-{YYYY}-{SEQ:5}"],
+    ["workforce_job_posting", "JOB-{YYYY}-{SEQ:5}"],
+    ["workforce_leave_request", "LV-{YYYY}-{SEQ:5}"],
+    ["workforce_manpower_plan", "MPP-{YYYY}-{SEQ:5}"],
+    ["workforce_overtime_request", "OT-{YYYY}-{SEQ:5}"],
+    ["workforce_payroll_run", "PAY-{YYYY}-{SEQ:5}"],
+    ["workforce_performance_review", "PRV-{YYYY}-{SEQ:5}"],
+  ];
+  for (const [code, pattern] of moduleNumbering) {
+    await pool.query(
+      `INSERT INTO numbering_sequences (tenant_id, code, pattern, current_sequence)
+       VALUES ($1, $2, $3, 0)
+       ON CONFLICT (tenant_id, code) DO NOTHING`,
+      [tenant.id, code, pattern],
+    );
+  }
+
   // Catering workflow definition: Work Order Lifecycle (PLANNED →
   // IN_PROGRESS → DONE → CLOSED). Steps/transitions/assignment rules are
   // ordinary tenant configuration rows, exactly like complaint_lifecycle
@@ -1291,6 +1386,30 @@ async function main() {
       [tenant.id, legalEntity.id, kernelActor.id],
     )
   ).rows[0];
+
+  // Keep the rest of FY2026 and the month the seed runs in open too —
+  // finalizing Work Order costs and issuing invoices post on "today" and
+  // fail with "No open accounting period" otherwise.
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const monthCodes = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const now = new Date();
+  const extraMonths: Array<[number, number]> = [[2026, 10], [2026, 11], [now.getFullYear(), now.getMonth()]];
+  for (const [year, month] of extraMonths) {
+    const from = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const to = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    await pool.query(
+      `INSERT INTO accounting_periods
+         (tenant_id, legal_entity_id, fiscal_year_code, period_code, period_name,
+          period_type, date_from, date_to, status, created_by)
+       SELECT $1, $2, $3, $4, $5, 'monthly', $6::date, $7::date, 'open', $8
+        WHERE NOT EXISTS (
+          SELECT 1 FROM accounting_periods
+           WHERE tenant_id = $1 AND legal_entity_id = $2
+             AND date_from <= $7::date AND date_to >= $6::date)`,
+      [tenant.id, legalEntity.id, `FY${year}`, `${monthCodes[month]}-${year}`, `${monthNames[month]} ${year}`, from, to, kernelActor.id],
+    );
+  }
 
   const coa = (
     await pool.query(

@@ -101,6 +101,11 @@ export const NAV_LABELS: Record<string, NavLabel> = {
     id: "Jenis Layanan",
     descriptionId: "Tentukan layanan yang dapat digunakan ulang oleh tim Anda.",
   },
+  "nav-service_operations-catering": {
+    en: "Catering",
+    id: "Katering",
+    descriptionId: "Rencanakan menu, resep, dan pesanan makan, lihat kebutuhan belanja, serta lacak batch makanan.",
+  },
   "nav-service_operations-service-packs": {
     en: "Service Packs",
     id: "Paket Layanan",

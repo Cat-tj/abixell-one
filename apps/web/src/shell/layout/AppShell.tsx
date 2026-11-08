@@ -95,18 +95,30 @@ function NavRow({
   nested,
   collapsed,
   onNavigate,
+  allPaths = [],
 }: {
   page: ServedNavPage;
   nested: boolean;
+  /** Every menu path, so a parent path (/project-delivery) is not shown as
+   * active while a more specific menu entry (/project-delivery/advanced/…) is. */
+  allPaths?: string[];
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
   const Icon = nested ? childPageIcon(page.code) : pageIcon(page.code);
+  const { pathname } = useLocation();
   const base = collapsed
     ? "flex min-h-[44px] items-center justify-center rounded-md"
     : nested
       ? "flex min-h-[44px] items-center gap-2.5 rounded-md px-3 py-1 text-[0.88rem] font-semibold lg:min-h-[38px]"
       : "flex min-h-[44px] items-center gap-3 rounded-md px-3 py-1 text-[0.92rem] font-semibold lg:min-h-[42px]";
+
+  const shadowed = allPaths.some(
+    (other) =>
+      other !== page.path &&
+      other.startsWith(`${page.path}/`) &&
+      (pathname === other || pathname.startsWith(`${other}/`)),
+  );
 
   if (page.locked) {
     return (
@@ -139,7 +151,7 @@ function NavRow({
       title={collapsed ? page.label : undefined}
       className={({ isActive }: { isActive: boolean }) =>
         `${base} transition-colors ${
-          isActive
+          isActive && !shadowed
             ? "bg-accent-soft font-extrabold text-accent [&>svg]:text-accent"
             : "text-ink-dim hover:bg-panel-2 [&>svg]:text-ink-faint"
         }`
@@ -188,6 +200,13 @@ function NavigationContent({
   const filteredGroups = useMemo(
     () => filterServedNav(groups, query),
     [groups, query],
+  );
+  const allPaths = useMemo(
+    () =>
+      groups.flatMap((group) =>
+        group.nodes.flatMap((node) => (node.type === "page" ? [node.path] : node.pages.map((p) => p.path))),
+      ),
+    [groups],
   );
 
   return (
@@ -249,6 +268,7 @@ function NavigationContent({
                           nested={false}
                           collapsed={collapsed}
                           onNavigate={onNavigate}
+                          allPaths={allPaths}
                         />
                       );
                     }
@@ -318,6 +338,7 @@ function NavigationContent({
                               nested
                               collapsed={collapsed}
                               onNavigate={onNavigate}
+                              allPaths={allPaths}
                             />
                           ))}
                         </div>

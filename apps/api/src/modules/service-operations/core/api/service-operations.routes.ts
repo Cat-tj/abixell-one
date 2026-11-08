@@ -334,7 +334,8 @@ export function registerServiceOperationsRoutes(app: FastifyInstance, container:
 
   app.get("/work-orders/:id/serving", { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    return reply.send(await svc().getServingLog(request.actor!, id));
+    // Same envelope as POST/PATCH: { servingLog }, null when none is recorded yet.
+    return reply.send({ servingLog: await svc().getServingLog(request.actor!, id) });
   });
 
   app.patch("/work-orders/:id/serving", { preHandler: app.authenticate }, async (request, reply) => {

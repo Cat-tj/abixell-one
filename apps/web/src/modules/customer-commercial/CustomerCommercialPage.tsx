@@ -192,9 +192,12 @@ export function CustomerCommercialPage() {
 
   async function submitForm(e: FormEvent<HTMLFormElement>, action: (form: FormData) => Promise<void>) {
     e.preventDefault();
+    // React clears currentTarget once the handler yields, so keep the form
+    // before awaiting; reset() after the await used to throw on success.
+    const form = e.currentTarget;
     try {
-      await action(new FormData(e.currentTarget));
-      e.currentTarget.reset();
+      await action(new FormData(form));
+      form.reset();
     } catch (err) {
       setMessage({ type: "error", text: err instanceof ApiError ? err.message : t("cc.main.msg.requestFailed") });
     }

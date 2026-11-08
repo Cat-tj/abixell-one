@@ -34,6 +34,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDateShort, statusTone } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 function label(value: string): string {
   return value.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -243,7 +244,7 @@ export function WorkforcePerformancePage() {
     await runAction(
       () => api.completeWorkforceTraining(token, id, {
         status: "completed",
-        completionDate: new Date().toISOString().slice(0, 10),
+        completionDate: localDateInputValue(),
       }),
       "Training marked as completed.",
     );

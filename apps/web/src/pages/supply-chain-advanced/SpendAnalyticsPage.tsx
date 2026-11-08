@@ -21,6 +21,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatMoney } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 export function SpendAnalyticsPage() {
   const { session } = useAuth();
@@ -30,9 +31,9 @@ export function SpendAnalyticsPage() {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 1);
-    return d.toISOString().slice(0, 10);
+    return localDateInputValue(d);
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => localDateInputValue());
 
   const [snapshots, setSnapshots] = useState<ScmSpendAnalyticsSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,13 +63,14 @@ export function SpendAnalyticsPage() {
     setError(null);
     setNotice(null);
     try {
-      const computed = await api.computeScmSpendSnapshot(token, {
+      // Compute returns the one snapshot it wrote; reload the list to show it.
+      await api.computeScmSpendSnapshot(token, {
         periodType: "monthly",
         periodStart: startDate,
         periodEnd: endDate,
       });
-      setSnapshots(computed);
-      setNotice(`Spend analytics snapshots recomputed (${computed.length} periods).`);
+      setSnapshots(await api.scmSpendSnapshots(token));
+      setNotice(t("scm.spend.msg.recomputed"));
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : t("scm.spend.msg.failedToRecomputeSpendAnalytics"));
     } finally {

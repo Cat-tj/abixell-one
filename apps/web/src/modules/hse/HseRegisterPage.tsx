@@ -59,8 +59,8 @@ export function HseRegisterPage() {
           recordType: filterType || undefined,
           categoryCode: filterCategory || undefined,
           severityCode: filterSeverity || undefined,
-          occurredFrom: filterFrom || undefined,
-          occurredTo: filterTo || undefined,
+          occurredFrom: filterFrom ? new Date(`${filterFrom}T00:00:00`).toISOString() : undefined,
+          occurredTo: filterTo ? new Date(`${filterTo}T23:59:59.999`).toISOString() : undefined,
           search: search || undefined,
         }),
       );

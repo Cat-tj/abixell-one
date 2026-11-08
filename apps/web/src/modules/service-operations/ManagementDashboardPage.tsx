@@ -29,12 +29,17 @@ export function ManagementDashboardPage() {
   const { session } = useAuth();
   const token = session!.accessToken;
 
-  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [period, setPeriod] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [dashboard, setDashboard] = useState<DashboardL2 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // A cleared month field would send `period=` and get a 400; wait for a value.
+    if (!/^\d{4}-\d{2}$/.test(period)) return;
     setLoading(true);
     setError(null);
     try {

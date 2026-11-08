@@ -658,6 +658,11 @@ describe("Phase 2 — Service Operations & Work Management Core", () => {
       const accepted = await post(`/work-orders/${workOrderId}/customer-accept`, verifierToken, {});
       expect(accepted.statusCode).toBe(200);
 
+      // Nothing recorded yet: a normal state, answered as { servingLog: null }.
+      const none = await get(`/work-orders/${workOrderId}/serving`, coordinatorToken);
+      expect(none.statusCode).toBe(200);
+      expect(none.json()).toEqual({ servingLog: null });
+
       // Record a serving event: meals received, served, returned, wasted.
       const serving = await post(`/work-orders/${workOrderId}/serving`, coordinatorToken, {
         mealDate: "2026-10-30",
@@ -675,6 +680,11 @@ describe("Phase 2 — Service Operations & Work Management Core", () => {
       expect(serving.json().servingLog.servingNumber).toMatch(/^SRV-/);
       expect(serving.json().servingLog.remainingQty).toBe("0.0000"); // 100 - 95 - 3 - 2
       expect(serving.json().workOrder.servingRecordedAt).toBeTruthy();
+
+      // GET answers with the same { servingLog } envelope the web reads.
+      const read = await get(`/work-orders/${workOrderId}/serving`, coordinatorToken);
+      expect(read.statusCode).toBe(200);
+      expect(read.json().servingLog.servingNumber).toBe(serving.json().servingLog.servingNumber);
     });
   });
 

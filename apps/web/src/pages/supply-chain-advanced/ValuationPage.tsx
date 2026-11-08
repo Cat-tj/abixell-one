@@ -260,7 +260,7 @@ export function ValuationPage() {
                   <Field label={t("scm.val.f.voucherNotes")}>
                     <Input value={lcNotes} onChange={(e) => setLcNotes(e.target.value)} placeholder={t("scm.val.p.customsBillBLReference")} disabled={!canManage || busy} />
                   </Field>
-                  <Button type="submit" variant="primary" disabled={!canManage || busy}>{t("scm.val.t.generateVoucher")}</Button>
+                  <Button type="submit" variant="primary" disabled={!canManage || busy || !(Number(lcFreight) > 0)}>{t("scm.val.t.generateVoucher")}</Button>
                 </form>
               </Card>
             </div>

@@ -30,6 +30,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDateShort, formatMoney } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 function label(v: string) {
   return v.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -60,7 +61,7 @@ export function ProcurementPage() {
   const [rfqDeadline, setRfqDeadline] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 14);
-    return d.toISOString().slice(0, 10);
+    return localDateInputValue(d);
   });
   const [rfqItemId, setRfqItemId] = useState("");
   const [rfqQty, setRfqQty] = useState("100");
@@ -103,7 +104,7 @@ export function ProcurementPage() {
 
   async function handleCreateRfq(e: React.FormEvent) {
     e.preventDefault();
-    if (!rfqTitle.trim() || !rfqItemId || Number(rfqQty) <= 0) return;
+    if (!rfqTitle.trim() || !rfqItemId || Number(rfqQty) <= 0 || !rfqDeadline) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -111,7 +112,8 @@ export function ProcurementPage() {
       await api.createScmRfq(token, {
         title: rfqTitle.trim(),
         procurementType: "rfq",
-        submissionDeadline: rfqDeadline,
+        // API wants a full date-time; the deadline is the end of the chosen local day.
+        submissionDeadline: new Date(`${rfqDeadline}T23:59:59`).toISOString(),
         notes: rfqSpec.trim() || null,
         items: [
           {
@@ -270,7 +272,7 @@ export function ProcurementPage() {
               <Field label={t("scm.proc.f.technicalSpecification")}>
                 <Input value={rfqSpec} onChange={(e) => setRfqSpec(e.target.value)} placeholder={t("scm.proc.p.minimum42uDualPdu")} disabled={!canManage || busy} />
               </Field>
-              <Button type="submit" variant="primary" disabled={!canManage || busy}>{t("scm.proc.t.publishRfq")}</Button>
+              <Button type="submit" variant="primary" disabled={!canManage || busy || !rfqTitle.trim() || !rfqItemId || Number(rfqQty) <= 0 || !rfqDeadline}>{t("scm.proc.t.publishRfq")}</Button>
             </form>
           </Card>
         </div>

@@ -86,7 +86,8 @@ export function ProjectDeliveryDetailPage() {
         plannedStartDate: activityStart || null,
         plannedEndDate: activityEnd || null,
         status: activityStatus as ProjectDeliveryActivity["status"],
-        progressPercent: activityProgress,
+        // API wants a whole 0-100; a blank or fractional field must not 400.
+        progressPercent: Math.min(100, Math.max(0, Math.round(activityProgress || 0))),
       });
       setActivityTitle("");
       setActivityStatus("planned");

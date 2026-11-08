@@ -42,6 +42,7 @@ import {
   type HseMonitoringPoint,
   type HseMonitoringReading,
 } from "../../lib/api";
+import { localDateTimeInputValue } from "../../shared/localDateTime";
 
 const DECIMAL = /^-?\d{1,16}(\.\d{1,4})?$/;
 
@@ -87,7 +88,7 @@ type ModalState =
     }
   | { kind: "capa-detail"; capaId: string };
 
-const nowLocal = () => new Date().toISOString().slice(0, 16);
+const nowLocal = () => localDateTimeInputValue();
 
 export function HseAdvancedMonitoringCapaPage() {
   const { session } = useAuth();
@@ -191,6 +192,10 @@ export function HseAdvancedMonitoringCapaPage() {
   };
 
   const recordReading = async (pointId: string) => {
+    if (!readingForm.measuredAt) {
+      setError(t("hse.capa.measuredAtRequired"));
+      return;
+    }
     if (!DECIMAL.test(readingForm.value.trim())) {
       setError(t("hse.capa.readingFormat"));
       return;
@@ -199,7 +204,7 @@ export function HseAdvancedMonitoringCapaPage() {
     setError(null);
     try {
       await api.recordHseAdvReading(token, pointId, {
-        measuredAt: readingForm.measuredAt,
+        measuredAt: new Date(readingForm.measuredAt).toISOString(),
         value: readingForm.value.trim(),
         note: readingForm.note.trim() || null,
       });

@@ -206,7 +206,7 @@ export function ItemsPage() {
               </Field>
               <div className="flex items-end gap-2">
                 <Button
-                  disabled={busy || !quantity}
+                  disabled={busy || !(Number(quantity) > 0)}
                   onClick={async () => {
                     await run(
                       () =>
@@ -224,7 +224,7 @@ export function ItemsPage() {
                 </Button>
                 <Button
                   variant="secondary"
-                  disabled={busy || !quantity}
+                  disabled={busy || !(Number(quantity) > 0)}
                   onClick={async () => {
                     await run(
                       () =>

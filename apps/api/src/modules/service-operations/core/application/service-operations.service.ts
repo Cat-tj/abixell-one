@@ -1266,15 +1266,13 @@ export class ServiceOperationsService {
   }
 
   /** Retrieve serving log for a Work Order (read tier). */
-  async getServingLog(actor: ActorContext, workOrderId: string): Promise<WorkOrderServingLog> {
+  /** The Work Order's serving log, or null when none has been recorded yet.
+   * "Not recorded yet" is a normal state of a visible Work Order, not a 404. */
+  async getServingLog(actor: ActorContext, workOrderId: string): Promise<WorkOrderServingLog | null> {
     await this.rbac.requirePermission(actor, "service_operations.read");
     this.requireInternalActor(actor);
     const workOrder = await this.getAuthorizedWorkOrderForRead(actor, workOrderId);
-    const servingLog = await this.repo.findServingLogByWorkOrder(workOrder.id);
-    if (!servingLog) {
-      throw new NotFoundError("ServingLog", workOrderId);
-    }
-    return servingLog;
+    return (await this.repo.findServingLogByWorkOrder(workOrder.id)) ?? null;
   }
 
   /** Update serving log (adjust closing time, quantities, supervisor). */

@@ -6,9 +6,10 @@
  * backend entity does not exist yet, so this tab renders an honest placeholder
  * instead of a pretend form.
  */
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type DocumentRecord } from "../../lib/api";
 import { useT } from "../../i18n/LocaleProvider";
+import { useAuth } from "../../auth/AuthContext";
 import { Alert, Button, Card, EmptyState, Field, Input, Spinner } from "../../shell/components/ui";
 
 type Message = { type: "error" | "success"; text: string };
@@ -23,15 +24,20 @@ export function DocumentsTab({
   onMessage: (m: Message) => void;
 }) {
   const t = useT();
+  // Tenant-level documents attach to the tenant itself: the API requires a
+  // UUID entityId, so the tenant id stands in for the old "system" literal.
+  const tenantId = useAuth().session?.tenantId ?? "";
   const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
+    if (!tenantId) return;
     setLoading(true);
-    api.documentsForEntity(token, "demo_transaction", "system")
+    setError(null);
+    api.documentsForEntity(token, "demo_transaction", tenantId)
       .then((data) => {
         setDocuments(data);
         setLoading(false);
@@ -40,13 +46,18 @@ export function DocumentsTab({
         setError(err instanceof Error ? err.message : t("documents.loadFailed"));
         setLoading(false);
       });
-  };
+  }, [token, tenantId, t]);
+
+  // The list was never fetched on mount, so the tab spun forever.
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const upload = async () => {
     if (!file || uploading) return;
     setUploading(true);
     try {
-      await api.uploadDocument(token, "demo_transaction", "system", file);
+      await api.uploadDocument(token, "demo_transaction", tenantId, file);
       onMessage({ type: "success", text: t("documents.uploaded") });
       setFile(null);
       load();

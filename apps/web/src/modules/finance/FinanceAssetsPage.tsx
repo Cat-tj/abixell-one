@@ -474,6 +474,8 @@ export function FinanceAssetsPage() {
                   !assetId ||
                   !ledgerId ||
                   !bookCode.trim() ||
+                  // API: usefulLifeMonths is a positive whole number.
+                  !/^[1-9]\d*$/.test(usefulLifeMonths.trim()) ||
                   !assetClass.trim() ||
                   !capitalizationDate ||
                   !inServiceDate ||

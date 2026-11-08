@@ -61,7 +61,6 @@ export function AdminCreateUserDialog({
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitInFlight.current || pending || !formRef.current) return;
-    submitInFlight.current = true;
     const form = new FormData(formRef.current);
     const email = String(form.get("email") ?? "").trim();
     const fullName = String(form.get("fullName") ?? "").trim();
@@ -76,6 +75,9 @@ export function AdminCreateUserDialog({
       return;
     }
 
+    // Latch only once validation has passed: an early return above must not
+    // leave it set, or every later submit is silently ignored.
+    submitInFlight.current = true;
     setStep("pending");
     setError(null);
     try {

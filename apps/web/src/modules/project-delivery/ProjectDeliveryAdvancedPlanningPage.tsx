@@ -37,6 +37,7 @@ import {
   type ProjectWbsNodeView,
   type ResourceLoadingResult,
 } from "../../lib/api";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 interface WbsDraft {
   code?: string;
@@ -44,10 +45,15 @@ interface WbsDraft {
   description?: string | null;
 }
 
-interface ModalState {
-  kind: "none" | "create-wbs" | "create-baseline";
-  data?: WbsDraft;
+interface BaselineDraft {
+  name?: string;
+  notes?: string | null;
 }
+
+type ModalState =
+  | { kind: "none" }
+  | { kind: "create-wbs"; data?: WbsDraft }
+  | { kind: "create-baseline"; data?: BaselineDraft };
 
 const BASELINE_STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warning" | "danger"> = {
   draft: "info",
@@ -75,6 +81,7 @@ export function ProjectDeliveryAdvancedPlanningPage() {
 
   // Schedule and critical path
   const [schedule, setSchedule] = useState<ProjectSchedule | null>(null);
+  const [activityTitles, setActivityTitles] = useState<Record<string, string>>({});
 
   // Resources
   const [resources, setResources] = useState<ProjectResource[]>([]);
@@ -90,7 +97,7 @@ export function ProjectDeliveryAdvancedPlanningPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
-  const [asOfDate, setAsOfDate] = useState<string>(new Date().toISOString().split("T")[0]); // YYYY-MM-DD
+  const [asOfDate, setAsOfDate] = useState<string>(localDateInputValue()); // YYYY-MM-DD
 
   // Load projects on mount
   useEffect(() => {
@@ -111,17 +118,21 @@ export function ProjectDeliveryAdvancedPlanningPage() {
     setLoading(true);
     setError(null);
     try {
-      const [wbsResp, schedResp, resourcesResp, loadingResp, baselinesResp, varianceResp] = await Promise.all([
+      const [wbsResp, schedResp, ganttResp, resourcesResp, loadingResp, baselinesResp, varianceResp] = await Promise.all([
         api.projectDeliveryWbs(token, projectId),
         api.projectDeliverySchedule(token, projectId),
+        api.projectDeliveryGantt(token, projectId),
         api.projectDeliveryResources(token),
         api.projectDeliveryResourceLoading(token, projectId, asOfDate, asOfDate),
         api.projectDeliveryBaselines(token, projectId),
-        api.projectDeliveryBaselineVariance(token, projectId, asOfDate),
+        // The API refuses variance until a baseline is approved; that is an
+        // expected empty state, not a load failure.
+        api.projectDeliveryBaselineVariance(token, projectId, asOfDate).catch(() => null),
       ]);
 
       setWbsNodes(wbsResp || []);
       setSchedule(schedResp || null);
+      setActivityTitles(Object.fromEntries((ganttResp || []).map((g) => [g.activityId, g.title])));
       setResources(resourcesResp || []);
       setLoadingResult(loadingResp || null);
       setBaselines(baselinesResp || []);
@@ -133,15 +144,21 @@ export function ProjectDeliveryAdvancedPlanningPage() {
     }
   }, [projectId, token, asOfDate, t]);
 
+  const wbsDraft = modal.kind === "create-wbs" ? modal.data : undefined;
+  const canCreateWbs = !!wbsDraft?.code?.trim() && !!wbsDraft?.name?.trim();
+  const baselineDraft = modal.kind === "create-baseline" ? modal.data : undefined;
+  const canCreateBaseline = !!baselineDraft?.name?.trim();
+
   const createWbs = async () => {
+    if (!canCreateWbs) return;
     setBusy(true);
     setError(null);
     try {
-      const body = modal.data ?? {};
+      const body = (modal.kind === "create-wbs" ? modal.data : undefined) ?? {};
       await api.createProjectDeliveryWbs(token, projectId, {
-        code: body.code ?? "",
-        name: body.name ?? "",
-        description: body.description ?? null,
+        code: (body.code ?? "").trim(),
+        name: (body.name ?? "").trim(),
+        description: body.description?.trim() || null,
       });
       setNotice(t("pd.plan.msg.wbsNodeCreated"));
       setModal({ kind: "none" });
@@ -154,13 +171,14 @@ export function ProjectDeliveryAdvancedPlanningPage() {
   };
 
   const createBaseline = async () => {
+    if (!canCreateBaseline) return;
     setBusy(true);
     setError(null);
     try {
-      const body = modal.data ?? {};
+      const body = (modal.kind === "create-baseline" ? modal.data : undefined) ?? {};
       await api.createProjectDeliveryBaseline(token, projectId, {
-        code: body.code ?? "",
-        description: body.description ?? null,
+        name: (body.name ?? "").trim(),
+        notes: body.notes?.trim() || null,
       });
       setNotice(t("pd.plan.msg.baselineCreated"));
       setModal({ kind: "none" });
@@ -212,15 +230,15 @@ export function ProjectDeliveryAdvancedPlanningPage() {
   const scheduleColumns: Column<ProjectSchedule["activities"][number]>[] = [
     {
       header: t("pd.plan.h.activity"),
-      cell: (row) => <span className="font-mono text-sm">{row.code}</span>,
+      cell: (row) => <span className="text-sm">{activityTitles[row.activityId] ?? row.activityId}</span>,
     },
     {
-      header: t("pd.plan.h.plannedStart"),
-      cell: (row) => <span>{row.plannedStart ? formatDateShort(row.plannedStart) : "—"}</span>,
+      header: t("pd.plan.h.earliestStart"),
+      cell: (row) => <span>{row.earliestStart ? formatDateShort(row.earliestStart) : "—"}</span>,
     },
     {
-      header: t("pd.plan.h.plannedFinish"),
-      cell: (row) => <span>{row.plannedFinish ? formatDateShort(row.plannedFinish) : "—"}</span>,
+      header: t("pd.plan.h.earliestFinish"),
+      cell: (row) => <span>{row.earliestFinish ? formatDateShort(row.earliestFinish) : "—"}</span>,
     },
     {
       header: t("pd.plan.h.criticalPath"),
@@ -244,14 +262,14 @@ export function ProjectDeliveryAdvancedPlanningPage() {
     },
     {
       header: t("pd.plan.h.type"),
-      cell: (row) => <Badge>{row.type}</Badge>,
+      cell: (row) => <Badge>{row.resourceType}</Badge>,
     },
   ];
 
   const baselineColumns: Column<ProjectBaseline>[] = [
     {
       header: t("pd.plan.h.baseline"),
-      cell: (row) => <span className="font-mono text-sm">{row.code}</span>,
+      cell: (row) => <span className="text-sm">{`v${row.version} — ${row.name}`}</span>,
     },
     {
       header: t("pd.plan.h.status"),
@@ -286,11 +304,11 @@ export function ProjectDeliveryAdvancedPlanningPage() {
     },
   ];
 
-  const varianceColumns: Column<BaselineVarianceResult["activities"][number]>[] = [
-    { header: t("pd.plan.h.activity"), cell: (row) => <span className="font-mono">{row.code}</span> },
-    { header: t("pd.plan.h.planned"), className: "tabular-nums", cell: (row) => <span>{formatMoney(row.plannedCost)}</span> },
+  const varianceColumns: Column<BaselineVarianceResult["lines"][number]>[] = [
+    { header: t("pd.plan.h.activity"), cell: (row) => <span className="text-sm">{row.title}</span> },
+    { header: t("pd.plan.h.planned"), className: "tabular-nums", cell: (row) => <span>{formatMoney(row.baselineCost)}</span> },
     { header: t("pd.plan.h.actual"), className: "tabular-nums", cell: (row) => <span>{formatMoney(row.actualCost)}</span> },
-    { header: t("pd.plan.h.variance"), className: "tabular-nums", cell: (row) => <span>{formatMoney(row.variance)}</span> },
+    { header: t("pd.plan.h.variance"), className: "tabular-nums", cell: (row) => <span>{formatMoney(row.costVariance)}</span> },
   ];
 
   return (
@@ -418,7 +436,7 @@ export function ProjectDeliveryAdvancedPlanningPage() {
               <h2 className="mb-3 text-sm font-semibold text-ink">{t("pd.plan.t.baselineVariance")}</h2>
               <DataTable
                 columns={varianceColumns}
-                rows={variance.activities || []}
+                rows={variance.lines || []}
                 keyOf={(row) => row.activityId}
                 empty={<EmptyState title={t("pd.plan.title.noVarianceData")} description={t("pd.plan.d.noActivitiesWithCostRecorded")} />}
               />
@@ -435,12 +453,14 @@ export function ProjectDeliveryAdvancedPlanningPage() {
             <Field label={t("pd.plan.f.code")} required>
               <Input
                 placeholder="WBS-001"
+                value={modal.data?.code ?? ""}
                 onChange={(e) => setModal({ ...modal, data: { ...modal.data, code: e.target.value } })}
               />
             </Field>
             <Field label={t("pd.plan.f.name")} required>
               <Input
                 placeholder={t("pd.plan.p.nodeName")}
+                value={modal.data?.name ?? ""}
                 onChange={(e) => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })}
               />
             </Field>
@@ -448,12 +468,13 @@ export function ProjectDeliveryAdvancedPlanningPage() {
               <Textarea
                 rows={2}
                 placeholder={t("pd.plan.p.optionalDescription")}
+                value={modal.data?.description ?? ""}
                 onChange={(e) => setModal({ ...modal, data: { ...modal.data, description: e.target.value || null } })}
               />
             </Field>
           </div>
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy} onClick={() => createWbs()}>
+            <Button disabled={busy || !canCreateWbs} onClick={() => createWbs()}>
               {t("common.create")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -467,22 +488,24 @@ export function ProjectDeliveryAdvancedPlanningPage() {
         <Card>
           <h2 className="mb-3 text-sm font-semibold text-ink">{t("pd.plan.t.createBaseline")}</h2>
           <div className="space-y-3">
-            <Field label={t("pd.plan.f.code")} required>
+            <Field label={t("pd.plan.f.name")} required>
               <Input
                 placeholder="BL-001"
-                onChange={(e) => setModal({ ...modal, data: { ...modal.data, code: e.target.value } })}
+                value={modal.data?.name ?? ""}
+                onChange={(e) => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })}
               />
             </Field>
             <Field label={t("pd.plan.f.description")}>
               <Textarea
                 rows={2}
                 placeholder={t("pd.plan.p.optionalDescription")}
-                onChange={(e) => setModal({ ...modal, data: { ...modal.data, description: e.target.value || null } })}
+                value={modal.data?.notes ?? ""}
+                onChange={(e) => setModal({ ...modal, data: { ...modal.data, notes: e.target.value || null } })}
               />
             </Field>
           </div>
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy} onClick={() => createBaseline()}>
+            <Button disabled={busy || !canCreateBaseline} onClick={() => createBaseline()}>
               {t("common.create")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>

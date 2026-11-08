@@ -34,6 +34,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDate, formatDateShort } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 const ATTENDANCE_STATUSES: WorkforceAttendanceStatus[] = [
   "present",
@@ -108,12 +109,12 @@ export function WorkforceAttendancePage() {
   // Roster Form
   const [rosterEmployeeId, setRosterEmployeeId] = useState("");
   const [rosterShiftId, setRosterShiftId] = useState("");
-  const [rosterDate, setRosterDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [rosterDate, setRosterDate] = useState(() => localDateInputValue());
   const [rosterNotes, setRosterNotes] = useState("");
 
   // Attendance Form
   const [attEmployeeId, setAttEmployeeId] = useState("");
-  const [attDate, setAttDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [attDate, setAttDate] = useState(() => localDateInputValue());
   const [attShiftId, setAttShiftId] = useState("");
   const [attClockIn, setAttClockIn] = useState("");
   const [attClockOut, setAttClockOut] = useState("");

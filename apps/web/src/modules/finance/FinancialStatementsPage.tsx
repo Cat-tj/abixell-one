@@ -78,6 +78,8 @@ export function FinancialStatementsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // Every keystroke reloads; wait until the date and 3-letter currency are complete.
+    if (!asOfDate || !/^[A-Za-z]{3}$/.test(currency)) return;
     setLoading(true);
     setError(null);
     try {

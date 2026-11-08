@@ -25,6 +25,7 @@ import {
   Textarea,
 } from "../../shell/components/ui";
 import { useT } from "../../i18n/LocaleProvider";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 export function HseReportPage() {
   const { session } = useAuth();
@@ -36,8 +37,7 @@ export function HseReportPage() {
   const [categoryCode, setCategoryCode] = useState("");
   const [severityCode, setSeverityCode] = useState("");
   const [occurredDate, setOccurredDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
+    return localDateInputValue();
   });
   const [occurredTime, setOccurredTime] = useState("09:00");
   const [title, setTitle] = useState("");
@@ -98,7 +98,7 @@ export function HseReportPage() {
     }
   }
 
-  const isValid = title.trim().length > 0;
+  const isValid = title.trim().length > 0 && Boolean(occurredDate) && Boolean(occurredTime);
 
   return (
     <div className="space-y-4">

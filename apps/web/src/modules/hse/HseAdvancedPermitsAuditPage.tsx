@@ -42,6 +42,7 @@ import {
   type HsePermit,
   type HsePermitDetail,
 } from "../../lib/api";
+import { localDateInputValue, localDateTimeInputValue } from "../../shared/localDateTime";
 
 const PERMIT_TYPES: { code: string; labelKey: MessageKey }[] = [
   { code: "hot_work", labelKey: "hse.permit.typeHotWork" },
@@ -87,8 +88,8 @@ type ModalState =
   | { kind: "programme-detail"; programmeId: string }
   | { kind: "occurrence-detail"; occurrenceId: string; programmeId: string };
 
-const today = () => new Date().toISOString().slice(0, 10);
-const nowLocal = () => new Date().toISOString().slice(0, 16);
+const today = () => localDateInputValue();
+const nowLocal = () => localDateTimeInputValue();
 
 export function HseAdvancedPermitsAuditPage() {
   const { session } = useAuth();
@@ -171,8 +172,9 @@ export function HseAdvancedPermitsAuditPage() {
         title: modal.title.trim(),
         description: modal.description.trim() || null,
         locationDetail: modal.locationDetail.trim() || null,
-        validFrom: modal.validFrom,
-        validTo: modal.validTo,
+        // Inputs hold local "YYYY-MM-DDTHH:mm"; send the instant so the timezone is kept.
+        validFrom: new Date(modal.validFrom).toISOString(),
+        validTo: new Date(modal.validTo).toISOString(),
       });
       setNotice(t("hse.permit.raised", { number: permit.permitNumber }));
       setModal({ kind: "none" });
@@ -224,7 +226,7 @@ export function HseAdvancedPermitsAuditPage() {
       setError(t("hse.permit.frequencyPositive"));
       return;
     }
-    const codes = modal.checklist.map((item) => item.code.trim());
+    const codes = modal.checklist.map((item) => item.code.trim()).filter(Boolean);
     if (new Set(codes).size !== codes.length) {
       setError(t("hse.permit.checklistUnique"));
       return;

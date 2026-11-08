@@ -38,6 +38,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDateShort, statusTone } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 const MAINTENANCE_TYPES: MaintenanceType[] = ["preventive", "corrective", "emergency"];
 const PRIORITIES: MaintenancePriority[] = ["low", "medium", "high", "critical"];
@@ -76,7 +77,7 @@ export function AssetMaintenancePage() {
 
   const [assetFilter, setAssetFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(() => localDateInputValue());
 
   const [scheduleAssetId, setScheduleAssetId] = useState("");
   const [scheduleCode, setScheduleCode] = useState("");

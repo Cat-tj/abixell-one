@@ -37,6 +37,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDate, formatDateShort } from "../../shared/format";
+import { localDateInputValue, localDateTimeInputValue } from "../../shared/localDateTime";
 
 const METER_TYPES: MeterReadingType[] = ["hours", "km", "cycles"];
 const DOWNTIME_REASONS: DowntimeReasonCategory[] = [
@@ -77,11 +78,11 @@ export function AssetPerformancePage() {
   // Meter form
   const [readingType, setReadingType] = useState<MeterReadingType>("hours");
   const [readingValue, setReadingValue] = useState("");
-  const [readingDate, setReadingDate] = useState(() => new Date().toISOString().slice(0, 16));
+  const [readingDate, setReadingDate] = useState(() => localDateTimeInputValue());
   const [meterNotes, setMeterNotes] = useState("");
 
   // Downtime form
-  const [downtimeStart, setDowntimeStart] = useState(() => new Date().toISOString().slice(0, 16));
+  const [downtimeStart, setDowntimeStart] = useState(() => localDateTimeInputValue());
   const [downtimeEnd, setDowntimeEnd] = useState("");
   const [downtimeReason, setDowntimeReason] = useState<DowntimeReasonCategory>("breakdown");
   const [downtimeNotes, setDowntimeNotes] = useState("");
@@ -91,9 +92,9 @@ export function AssetPerformancePage() {
   const [periodStart, setPeriodStart] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 90);
-    return d.toISOString().slice(0, 10);
+    return localDateInputValue(d);
   });
-  const [periodEnd, setPeriodEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [periodEnd, setPeriodEnd] = useState(() => localDateInputValue());
 
   const load = useCallback(async () => {
     if (!assetId) return;

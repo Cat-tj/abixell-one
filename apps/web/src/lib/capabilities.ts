@@ -360,6 +360,16 @@ export const NAV_SECTIONS: NavSection[] = [
     requiresInternal: true,
   },
   {
+    key: "catering",
+    moduleCode: "service_operations",
+    group: "operations",
+    path: "/catering",
+    label: "Catering",
+    description: "Plan menus, recipes and meal orders, see what to buy, and track meal batches.",
+    requiresAnyOf: [PERMISSIONS.serviceOperationsRead],
+    requiresInternal: true,
+  },
+  {
     key: "service-types",
     moduleCode: "service_operations",
     group: "operations",

@@ -356,7 +356,7 @@ export function PurchasingPage() {
               </Field>
               <div className="flex items-end">
                 <Button
-                  disabled={busy || !receiptLineId || !receiptQuantity}
+                  disabled={busy || !receiptLineId || !(Number(receiptQuantity) > 0)}
                   onClick={async () => {
                     await run(
                       () =>

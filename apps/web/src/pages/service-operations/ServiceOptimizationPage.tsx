@@ -34,6 +34,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDate } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 function optimizationStatusTone(
   status: OptimizationRunStatus,
@@ -66,7 +67,7 @@ export function ServiceOptimizationPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   // Form state
-  const [targetDate, setTargetDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [targetDate, setTargetDate] = useState(() => localDateInputValue());
   const [maxOrders, setMaxOrders] = useState("8");
   const [maxMinutes, setMaxMinutes] = useState("480");
   const [prioritizeSla, setPrioritizeSla] = useState(true);

@@ -31,6 +31,7 @@ import {
   Select,
   Spinner,
   StatusPill,
+  Textarea,
   type Column,
 } from "../../shell/components/ui";
 import { dueIndicator, formatDateShort, statusTone } from "../../shared/format";
@@ -54,6 +55,8 @@ export function WorkOrderQueuePage() {
   const [title, setTitle] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [woType, setWoType] = useState<WorkOrderType>("regular");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +86,8 @@ export function WorkOrderQueuePage() {
         customerId,
         serviceDefinitionCode: serviceCode,
         title,
+        description: description.trim() || null,
+        priority: priority || null,
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
         // Back-charge WOs never carry a contractId; the form has no contract
         // field, so it is simply omitted from the payload.
@@ -90,6 +95,8 @@ export function WorkOrderQueuePage() {
       });
       setNotice(t("mo.woq.msg.workOrderCreated"));
       setTitle("");
+      setDescription("");
+      setPriority("");
       setDueAt("");
       await load();
     } catch (err) {
@@ -184,6 +191,26 @@ export function WorkOrderQueuePage() {
           <Field label={t("mo.woq.f.title")} required>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("mo.woq.p.whatNeedsDoing")} />
           </Field>
+          <Field label={t("mo.wod.f.priority")}>
+            <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="">{t("mo.woq.t.select")}</option>
+              {(["low", "medium", "high", "critical"] as const).map((p) => (
+                <option key={p} value={p}>
+                  {t(`mo.woq.priority.${p}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="sm:col-span-2 lg:col-span-4">
+            <Field label={t("mo.wod.f.description")}>
+              <Textarea
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t("mo.woq.p.descriptionHint")}
+              />
+            </Field>
+          </div>
           <div className="flex items-end gap-3">
             <Field label={t("mo.woq.f.due")}>
               <Input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />

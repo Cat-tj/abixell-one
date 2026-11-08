@@ -52,6 +52,7 @@ const SupplierContractsPage = lazy(() => import("./pages/procurement").then((m) 
 const SpendAnalyticsPage = lazy(() => import("./pages/procurement").then((m) => ({ default: m.SpendAnalyticsPage })));
 const AssetsPage = lazy(() => import("./modules/asset/AssetsPage").then((m) => ({ default: m.AssetsPage })));
 const AssetDetailPage = lazy(() => import("./modules/asset/AssetDetailPage").then((m) => ({ default: m.AssetDetailPage })));
+const CateringPage = lazy(() => import("./pages/service-operations/CateringPage").then((m) => ({ default: m.CateringPage })));
 const ServicePacksPage = lazy(() => import("./pages/service-operations/ServicePacksPage").then((m) => ({ default: m.ServicePacksPage })));
 const ServiceOptimizationPage = lazy(() => import("./pages/service-operations/ServiceOptimizationPage").then((m) => ({ default: m.ServiceOptimizationPage })));
 const ServiceOptimizationDetailPage = lazy(() => import("./pages/service-operations/ServiceOptimizationDetailPage").then((m) => ({ default: m.ServiceOptimizationDetailPage })));
@@ -162,6 +163,7 @@ export default function App() {
           <Route path="my-work/:workOrderId" element={<MyWorkDetailPage />} />
           <Route path="service-types" element={<ServiceDefinitionsPage />} />
           {/* Wave A3 — Vertical Packs and Service Operations optimization */}
+          <Route path="catering" element={<CateringPage />} />
           <Route path="service-packs" element={<ServicePacksPage />} />
           <Route path="service-optimization" element={<ServiceOptimizationPage />} />
           <Route path="service-optimization/:runId" element={<ServiceOptimizationDetailPage />} />

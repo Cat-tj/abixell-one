@@ -47,6 +47,8 @@ export function CashflowPage() {
   const [accountCode, setAccountCode] = useState("");
 
   const load = useCallback(async () => {
+    // Don't refetch with a half-cleared range: the API would 400 and blank the page.
+    if (!from || !to) return;
     setLoading(true);
     setError(null);
     try {

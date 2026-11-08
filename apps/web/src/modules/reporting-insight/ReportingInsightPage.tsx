@@ -961,8 +961,8 @@ export function ReportingInsightPage() {
                   <span className="font-medium text-slate-700">{t("ri.main.t.forecastHorizonDays")}</span>
                   <Input
                     type="number"
-                    min={7}
-                    max={90}
+                    min={1}
+                    max={30}
                     value={forecastDays}
                     onChange={(e) => setForecastDays(Number(e.target.value))}
                   />
@@ -972,11 +972,20 @@ export function ReportingInsightPage() {
               <div className="flex items-end">
                 <Button
                   onClick={handleGenerateForecast}
-                  disabled={forecastGenerating}
+                  // Same bounds as the API (lookback 30-365, horizon 1-30 whole days).
+                  disabled={
+                    forecastGenerating ||
+                    !Number.isInteger(lookbackDays) ||
+                    lookbackDays < 30 ||
+                    lookbackDays > 365 ||
+                    !Number.isInteger(forecastDays) ||
+                    forecastDays < 1 ||
+                    forecastDays > 30
+                  }
                   variant="primary"
                   className="w-full sm:w-auto"
                 >
-                  {forecastGenerating ? "Computing Model…" : "Generate Forecast"}
+                  {forecastGenerating ? t("ri.main.b.computingModel") : t("ri.main.b.generateForecast")}
                 </Button>
               </div>
             </div>

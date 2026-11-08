@@ -240,7 +240,7 @@ export function AssetDetailPage() {
         </dl>
         <div className="mt-3">
           <Button
-            disabled={busy}
+            disabled={busy || !name.trim()}
             onClick={() =>
               run(
                 () =>

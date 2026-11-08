@@ -173,7 +173,9 @@ export function HseAdvancedInvestigationsPage() {
       await api.updateHseAdvInvestigation(token, modal.id, {
         findings: modal.findings.trim() || null,
         rootCause: modal.rootCause.trim() || null,
-        contributingFactors: modal.factors,
+        contributingFactors: modal.factors
+          .map((f) => ({ ...f, category: f.category.trim(), description: f.description.trim() }))
+          .filter((f) => f.category && f.description),
         concluded: conclude,
       });
       setNotice(conclude ? t("hse.inv.concludedNotice") : t("hse.inv.updatedNotice"));
@@ -570,7 +572,7 @@ export function HseAdvancedInvestigationsPage() {
                 </Button>
               </div>
               {modal.factors.map((factor, index) => (
-                <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-4">
                   <Input
                     placeholder={t("fin.common.category")}
                     value={factor.category}
@@ -589,6 +591,19 @@ export function HseAdvancedInvestigationsPage() {
                     />
                     {t("hse.inv.rootCauseCheck")}
                   </label>
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    onClick={() =>
+                      setModal((m) =>
+                        m.kind === "conclude-investigation"
+                          ? { ...m, factors: m.factors.filter((_, i) => i !== index) }
+                          : m,
+                      )
+                    }
+                  >
+                    {t("hse.common.remove")}
+                  </Button>
                 </div>
               ))}
             </div>
