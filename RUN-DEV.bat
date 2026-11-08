@@ -62,7 +62,7 @@ start "Abixell %VARIANT% Web" /D "%~dp0" "%ComSpec%" /d /k npm run dev:web
 powershell -NoProfile -Command "Start-Sleep -Seconds 5"
 start "" "http://localhost:%WEB_PORT%"
 echo Web: http://localhost:%WEB_PORT%  API: http://localhost:%API_PORT%
-echo Login: demo-gs / admin@demo.local / Admin12345!
+echo Login: demo-gs / admin@demo.local / admin123!
 echo Keep the API and Web windows open. This is a local testing environment.
 exit /b 0
 :fail

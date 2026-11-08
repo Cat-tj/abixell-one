@@ -70,7 +70,7 @@ For **production** (manual deployment), copy the `.env.example` template and fil
 
 - Keep environment files mode `0600` or stricter on POSIX hosts.
 - Never run `docker compose config` into a ticket or shared log; rendered output may include secrets. `deploy:validate` uses quiet validation.
-- Never reuse development/demo credentials, `Admin12345!`, or values containing `replace-`, `change-me`, `dev-only`, or `abixell_dev_password`.
+- Never reuse development/demo credentials, `Admin12345!`, `admin123!`, or values containing `replace-`, `change-me`, `dev-only`, or `abixell_dev_password`.
 - Rotate secrets per deployment. A compromise or client offboarding does not rotate any other deployment.
 - Single-quote protected environment values containing a literal `$`. Validation compares the parsed values with the rendered Compose model and rejects interpolation changes.
 - The deployment lock/state root defaults to a host-global location keyed by `COMPOSE_PROJECT_NAME` (`$XDG_STATE_HOME/abixell-one`, i.e. `~/.local/state/abixell-one`, on POSIX, `%ProgramData%/AbixellOne/deployments` on Windows). If `DEPLOYMENT_STATE_ROOT` is overridden, every checkout/automation path for that deployment must use the same protected host-global root. The directory is owned by the deploy user and must live on persistent storage: `/var/lock` is tmpfs on systemd hosts, so state there is lost on reboot and the next deploy fails closed with no prior release state.

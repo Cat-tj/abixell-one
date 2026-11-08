@@ -138,7 +138,7 @@ try {
   const emailInput = page.getByLabel("Email");
   const passwordInput = page.getByLabel("Password");
   await emailInput.fill("admin@demo.local");
-  await passwordInput.fill("Admin12345!");
+  await passwordInput.fill("admin123!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(`${BASE}/select-workspace`, { timeout: 8000 });
   await assertVisible(

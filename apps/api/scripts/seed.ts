@@ -151,7 +151,7 @@ async function main() {
     ]);
   }
 
-  const adminPasswordHash = await hashPassword("Admin12345!");
+  const adminPasswordHash = await hashPassword("admin123!");
   const admin = (
     await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name)
