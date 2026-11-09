@@ -8,7 +8,7 @@
  */
 import { useT } from "../../i18n/LocaleProvider";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import {
   api,
@@ -1044,6 +1044,7 @@ export function WorkOrderDetailPage() {
 
       <StepSection id="wo-step-invoice" title={t("mo.wod.sec.invoice")} prereq={6} open={unlocked.invoice} current={currentKey === "invoice"} isDone={done.invoice} t={t}>
           {invoice ? (
+            <div className="space-y-3">
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-slate-500">{t("mo.wod.f.invoiceNumber")}</dt>
@@ -1080,6 +1081,10 @@ export function WorkOrderDetailPage() {
                 <dd className="text-slate-900">{formatDate(invoice.issuedAt)}</dd>
               </div>
             </dl>
+            <Link to="/customer-invoices" className="inline-block text-sm font-medium text-accent hover:underline">
+              {t("mo.wod.l.allInvoices")}
+            </Link>
+            </div>
           ) : !workOrder.costsFinalizedAt ? (
             <p className="text-sm text-ink-faint">{t("mo.wod.n.invoiceNeedsFinalize")}</p>
           ) : (

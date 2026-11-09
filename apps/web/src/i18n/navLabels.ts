@@ -96,6 +96,11 @@ export const NAV_LABELS: Record<string, NavLabel> = {
     id: "Perintah Kerja",
     descriptionId: "Rencanakan, tugaskan, dan pantau pekerjaan yang diselesaikan tim Anda.",
   },
+  "nav-service_operations-customer-invoices": {
+    en: "Customer Invoices",
+    id: "Faktur Pelanggan",
+    descriptionId: "Lihat semua faktur yang dibuat dari Perintah Kerja beserta nilai dan status pembayarannya.",
+  },
   "nav-service_operations-service-types": {
     en: "Service Types",
     id: "Jenis Layanan",

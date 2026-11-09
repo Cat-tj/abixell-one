@@ -220,6 +220,38 @@ export interface CustomerInvoice {
   updatedAt: Date;
 }
 
+/** Flat row for the tenant-wide invoice list (invoice + WO/customer/site names). */
+export interface CustomerInvoiceListItem {
+  id: string;
+  invoiceNumber: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  workOrderTitle: string;
+  customerId: string;
+  customerName: string;
+  siteName: string | null;
+  invoiceDate: Date;
+  createdAt: Date;
+  costBasis: string;
+  markupRate: string;
+  baseAmount: string;
+  taxRate: string | null;
+  taxAmount: string;
+  totalAmount: string;
+  currency: string;
+  status: string;
+  arStatus: string;
+}
+
+export interface CustomerInvoiceListFilter {
+  workOrderIds: string[];
+  arStatus?: string;
+  customerId?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+}
+
 export interface CreateInvoiceInput {
   legalEntityId: string;
   /** Optional per-invoice override of the tenant default markup rate. */
@@ -554,6 +586,7 @@ export interface ServiceOperationsRepository {
     client?: PoolClient,
   ): Promise<CustomerInvoice | null>;
   findInvoiceByWorkOrder(tenantId: string, workOrderId: string): Promise<CustomerInvoice | null>;
+  listInvoices(tenantId: string, filter: CustomerInvoiceListFilter): Promise<CustomerInvoiceListItem[]>;
 
   // Work Order serving log (SO-CORE-016)
   createServingLog(input: CreateServingLogInput): Promise<WorkOrderServingLog>;

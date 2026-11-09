@@ -258,6 +258,13 @@ export const ROUTE_REGISTRY: RouteRegistryEntry[] = [
     permissions: ["service_operations.read"],
   },
   {
+    path: "/customer-invoices",
+    name: "Customer Invoices",
+    moduleCode: "service_operations",
+    status: "di_menu",
+    permissions: ["service_operations.read"],
+  },
+  {
     path: "/work-orders/:workOrderId",
     name: "Work Order Detail",
     moduleCode: "service_operations",

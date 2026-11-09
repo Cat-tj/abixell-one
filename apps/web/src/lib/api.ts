@@ -1297,6 +1297,12 @@ export const api = {
       if (err instanceof ApiError && err.status === 404) return null;
       throw err;
     }),
+  customerInvoices: (token: string, filter: CustomerInvoiceFilter = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(filter)) if (v) qs.set(k, v);
+    const suffix = qs.toString();
+    return request<{ items: CustomerInvoiceListItem[] }>(`/customer-invoices${suffix ? `?${suffix}` : ""}`, { token });
+  },
   recordServingLog: (token: string, workOrderId: string, body: CreateServingLogInput) =>
     request<{ servingLog: WorkOrderServingLog }>(`/work-orders/${workOrderId}/serving`, {
       method: "POST",
@@ -6656,6 +6662,38 @@ export type WorkOrderCustomerInvoice = {
   currency: string;
   arStatus: string;
   issuedAt: string;
+};
+
+export type CustomerInvoiceListItem = {
+  id: string;
+  invoiceNumber: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  workOrderTitle: string;
+  customerId: string;
+  customerName: string;
+  siteName: string | null;
+  invoiceDate: string;
+  createdAt: string;
+  costBasis: string;
+  markupRate: string;
+  baseAmount: string;
+  taxRate: string | null;
+  taxAmount: string;
+  totalAmount: string;
+  currency: string;
+  status: string;
+  arStatus: string;
+};
+
+export type CustomerInvoiceFilter = {
+  arStatus?: string;
+  customerId?: string;
+  /** YYYY-MM-DD */
+  from?: string;
+  /** YYYY-MM-DD */
+  to?: string;
+  q?: string;
 };
 
 export type CreateWorkOrderInvoiceInput = {

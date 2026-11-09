@@ -2,6 +2,8 @@ import type { Pool, PoolClient, QueryResultRow } from "pg";
 import type {
   AddCostItemInput,
   CustomerInvoice,
+  CustomerInvoiceListFilter,
+  CustomerInvoiceListItem,
   CreateServiceDefinitionInput,
   CreateServingLogInput,
   CreateWorkOrderInput,
@@ -697,6 +699,68 @@ export class PgServiceOperationsRepository implements ServiceOperationsRepositor
       throw error;
     }
     return r.rows[0] ? toCustomerInvoice(r.rows[0]) : null;
+  }
+
+  async listInvoices(tenantId: string, filter: CustomerInvoiceListFilter): Promise<CustomerInvoiceListItem[]> {
+    if (filter.workOrderIds.length === 0) return [];
+    const params: unknown[] = [tenantId, filter.workOrderIds];
+    const conditions = [`ci.tenant_id = $1`, `ci.work_order_id = ANY($2::uuid[])`];
+    if (filter.arStatus) {
+      params.push(filter.arStatus);
+      conditions.push(`ci.ar_status = $${params.length}`);
+    }
+    if (filter.customerId) {
+      params.push(filter.customerId);
+      conditions.push(`ci.customer_id = $${params.length}`);
+    }
+    if (filter.from) {
+      params.push(filter.from);
+      conditions.push(`ci.issued_at >= $${params.length}::date`);
+    }
+    if (filter.to) {
+      params.push(filter.to);
+      conditions.push(`ci.issued_at < ($${params.length}::date + 1)`);
+    }
+    if (filter.q) {
+      params.push(`%${filter.q}%`);
+      const n = params.length;
+      conditions.push(
+        `(ci.invoice_number ILIKE $${n} OR c.name ILIKE $${n} OR wo.work_order_number ILIKE $${n} OR wo.title ILIKE $${n})`,
+      );
+    }
+    const r = await this.pool.query(
+      `SELECT ci.*, wo.work_order_number, wo.title AS work_order_title,
+              c.name AS customer_name, s.name AS site_name
+         FROM customer_invoices ci
+         JOIN work_orders wo ON wo.tenant_id = ci.tenant_id AND wo.id = ci.work_order_id
+         JOIN customers c ON c.tenant_id = ci.tenant_id AND c.id = ci.customer_id
+         LEFT JOIN sites s ON s.id = wo.site_id
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY ci.issued_at DESC, ci.created_at DESC
+        LIMIT 500`,
+      params,
+    );
+    return r.rows.map((row) => ({
+      id: row.id,
+      invoiceNumber: row.invoice_number,
+      workOrderId: row.work_order_id,
+      workOrderNumber: row.work_order_number,
+      workOrderTitle: row.work_order_title,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      siteName: row.site_name ?? null,
+      invoiceDate: row.issued_at,
+      createdAt: row.created_at,
+      costBasis: row.cost_basis,
+      markupRate: row.markup_rate,
+      baseAmount: row.base_amount,
+      taxRate: row.tax_rate,
+      taxAmount: row.tax_amount,
+      totalAmount: row.total_amount,
+      currency: row.currency,
+      status: row.ar_status,
+      arStatus: row.ar_status,
+    }));
   }
 
   async findInvoiceByWorkOrder(tenantId: string, workOrderId: string): Promise<CustomerInvoice | null> {

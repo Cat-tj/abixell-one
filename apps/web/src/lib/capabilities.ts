@@ -360,6 +360,16 @@ export const NAV_SECTIONS: NavSection[] = [
     requiresInternal: true,
   },
   {
+    key: "customer-invoices",
+    moduleCode: "service_operations",
+    group: "operations",
+    path: "/customer-invoices",
+    label: "Customer Invoices",
+    description: "See every customer invoice raised from a Work Order, its amount and payment status.",
+    requiresAnyOf: [PERMISSIONS.serviceOperationsRead],
+    requiresInternal: true,
+  },
+  {
     key: "catering",
     moduleCode: "service_operations",
     group: "operations",

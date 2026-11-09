@@ -96,6 +96,7 @@ const CHILD_PAGE_ICONS: Record<string, LucideIcon> = {
   "nav-survey_assessment-surveys": ClipboardCheck,
   "nav-service_operations-my-work": Briefcase,
   "nav-service_operations-work-orders": ClipboardList,
+  "nav-service_operations-customer-invoices": Receipt,
   "nav-service_operations-service-types": Tags,
   "nav-service_operations-catering": UtensilsCrossed,
   "nav-service_operations-service-packs": Package,

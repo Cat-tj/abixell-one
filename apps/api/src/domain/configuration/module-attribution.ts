@@ -311,6 +311,7 @@ export const API_SEGMENT_MODULES: Readonly<Record<string, ModuleCode>> = {
   // WP-MD-03 Catering vertical master — a service-operations vertical, not a
   // new module.
   catering: "service_operations",
+  "customer-invoices": "service_operations",
 
   // Supply Chain — shared master data and purchasing.
   items: "supply_chain",

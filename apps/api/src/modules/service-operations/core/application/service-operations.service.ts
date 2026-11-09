@@ -30,6 +30,7 @@ import type {
   WorkOrderServingLog,
   WorkRequest,
   CustomerInvoice,
+  CustomerInvoiceListItem,
 } from "../domain/service-operations.entity.js";
 import { workRequestState } from "../domain/service-operations.entity.js";
 
@@ -1150,6 +1151,20 @@ export class ServiceOperationsService {
       throw new NotFoundError("Invoice", workOrder.id);
     }
     return invoice;
+  }
+
+  /** Tenant-wide invoice list. Same Work Order visibility rule as the WO list,
+   * so an actor only sees invoices of Work Orders they can open. */
+  async listInvoices(
+    actor: ActorContext,
+    filter: { arStatus?: string; customerId?: string; from?: string; to?: string; q?: string } = {},
+  ): Promise<CustomerInvoiceListItem[]> {
+    await this.rbac.requirePermission(actor, "service_operations.read");
+    const orders = await this.listWorkOrders(actor);
+    return this.repo.listInvoices(actor.tenantId, {
+      ...filter,
+      workOrderIds: orders.map((o) => o.workOrder.id),
+    });
   }
 
   /** Tenant default markup via the parameter bridge — trusted-caller read so

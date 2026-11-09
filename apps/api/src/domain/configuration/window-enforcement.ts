@@ -138,6 +138,8 @@ export const WINDOW_RULES: WindowRule[] = [
   // WP-MD-03 Catering vertical master: configuration + operational planning
   // raised from the Work Orders family until a dedicated catering Window exists.
   { method: "*", apiPath: "/catering", windowCode: "route:/work-orders" },
+  // Customer invoices are raised from Work Order step 7; the list read is owned by the Work Orders Window.
+  { method: "*", apiPath: "/customer-invoices", windowCode: "route:/work-orders" },
 
   // --- customer_commercial -------------------------------------------------
   // `/projects` (customer_commercial) and `/project-delivery/projects` are
