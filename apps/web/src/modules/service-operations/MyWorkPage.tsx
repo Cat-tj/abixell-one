@@ -18,6 +18,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { dueIndicator, formatDateShort, statusTone } from "../../shared/format";
+import { isFinished, sortWorkOrders } from "./workOrderListing";
 
 export function MyWorkPage() {
   const t = useT();
@@ -33,7 +34,7 @@ export function MyWorkPage() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await api.myWorkOrders(token));
+      setRows(sortWorkOrders(await api.myWorkOrders(token)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("mo.mw.msg.couldNotLoadYourWork"));
     } finally {
@@ -65,7 +66,7 @@ export function MyWorkPage() {
     {
       header: t("mo.mw.h.due"),
       cell: (row) => {
-        const indicator = dueIndicator(row.workOrder.dueAt);
+        const indicator = isFinished(row) ? null : dueIndicator(row.workOrder.dueAt);
         return (
           <span className="flex flex-wrap items-center gap-2">
             {formatDateShort(row.workOrder.dueAt)}

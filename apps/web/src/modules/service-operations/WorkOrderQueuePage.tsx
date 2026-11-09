@@ -35,6 +35,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { dueIndicator, formatDateShort, statusTone } from "../../shared/format";
+import { isFinished, sortWorkOrders } from "./workOrderListing";
 
 export function WorkOrderQueuePage() {
   const t = useT();
@@ -57,6 +58,7 @@ export function WorkOrderQueuePage() {
   const [woType, setWoType] = useState<WorkOrderType>("regular");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("");
+  const [view, setView] = useState<"active" | "finished" | "all">("active");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +69,7 @@ export function WorkOrderQueuePage() {
         api.customers(token).catch(() => [] as Customer[]),
         api.serviceDefinitions(token).catch(() => [] as ServiceDefinition[]),
       ]);
-      setRows(orders);
+      setRows(sortWorkOrders(orders));
       setCustomers(customerList);
       setServiceTypes(definitions.filter((d) => d.isActive));
     } catch (err) {
@@ -144,12 +146,13 @@ export function WorkOrderQueuePage() {
     },
     {
       header: t("mo.woq.h.assignment"),
-      cell: (row) => <Badge>{row.workOrder.assignedToUserId ? "Assigned" : "Unassigned"}</Badge>,
+      cell: (row) => <Badge>{row.workOrder.assignedToUserId ? t("mo.woq.assigned") : t("mo.woq.unassigned")}</Badge>,
     },
     {
       header: t("mo.woq.h.due"),
       cell: (row) => {
-        const indicator = dueIndicator(row.workOrder.dueAt);
+        // A finished job is not "late" any more — only open work gets a due flag.
+        const indicator = isFinished(row) ? null : dueIndicator(row.workOrder.dueAt);
         return (
           <span className="flex flex-wrap items-center gap-2">
             {formatDateShort(row.workOrder.dueAt)}
@@ -235,9 +238,20 @@ export function WorkOrderQueuePage() {
       {loading ? (
         <Spinner />
       ) : (
+        <>
+        <div className="mb-3 mt-6 flex flex-wrap items-center gap-2" role="tablist">
+          {(["active", "finished", "all"] as const).map((v) => {
+            const count = v === "all" ? rows.length : rows.filter((r) => (v === "finished") === isFinished(r)).length;
+            return (
+              <Button key={v} variant={view === v ? "primary" : "secondary"} onClick={() => setView(v)}>
+                {t(`mo.woq.view.${v}`)} ({count})
+              </Button>
+            );
+          })}
+        </div>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={view === "all" ? rows : rows.filter((r) => (view === "finished") === isFinished(r))}
           keyOf={(row) => row.workOrder.id}
           onRowClick={(row) => navigate(`/work-orders/${row.workOrder.id}`)}
           empty={
@@ -247,6 +261,7 @@ export function WorkOrderQueuePage() {
             />
           }
         />
+        </>
       )}
     </div>
   );
