@@ -138,11 +138,14 @@ export async function makeCtx(
   opts: { tenantCode: string; email: string; password: string },
 ): Promise<DemoCtx> {
   const tokens = new Map<string, string>();
+  const passwords = new Map<string, string>([[opts.email, opts.password]]);
 
-  async function login(email: string, password: string): Promise<string> {
-    const key = email;
-    const cached = tokens.get(key);
-    if (cached) return cached;
+  // Access tokens live 15 minutes and a full run takes longer, so every call
+  // goes through `authed`, which logs in again once on a 401.
+  async function login(email: string, password: string, fresh = false): Promise<string> {
+    passwords.set(email, password);
+    const cached = tokens.get(email);
+    if (cached && !fresh) return cached;
     const r = await app.inject({
       method: "POST",
       url: "/auth/login",
@@ -150,25 +153,29 @@ export async function makeCtx(
     });
     if (r.statusCode !== 200) throw new ApiCallError("POST", "/auth/login", r.statusCode, r.body);
     const token = (r.json() as { accessToken: string }).accessToken;
-    tokens.set(key, token);
+    tokens.set(email, token);
     return token;
   }
 
-  async function raw(token: string, method: string, url: string, body?: unknown) {
-    const r = await app.inject({
-      method: method as any,
-      url,
-      headers: { authorization: `Bearer ${token}` },
-      ...(body !== undefined ? { payload: body as any } : {}),
-    });
+  async function authed(email: string, method: string, url: string, body?: unknown) {
+    const send = (token: string) =>
+      app.inject({
+        method: method as any,
+        url,
+        headers: { authorization: `Bearer ${token}` },
+        ...(body !== undefined ? { payload: body as any } : {}),
+      });
+    const password = passwords.get(email)!;
+    let r = await send(await login(email, password));
+    if (r.statusCode === 401) r = await send(await login(email, password, true));
     return r;
   }
 
-  const adminToken = await login(opts.email, opts.password);
-  const me = (await raw(adminToken, "GET", "/me")).json() as { id?: string; userId?: string; tenantId: string };
+  await login(opts.email, opts.password);
+  const me = (await authed(opts.email, "GET", "/me")).json() as { id?: string; userId?: string; tenantId: string };
 
   const call = async (method: any, url: string, body?: unknown) => {
-    const r = await raw(adminToken, method, url, body);
+    const r = await authed(opts.email, method, url, body);
     if (r.statusCode < 200 || r.statusCode >= 300) throw new ApiCallError(method, url, r.statusCode, r.body);
     return r.body ? r.json() : null;
   };
@@ -181,14 +188,14 @@ export async function makeCtx(
     adminUserId: (me.id ?? me.userId) as string,
     call,
     tryGet: async (url) => {
-      const r = await raw(adminToken, "GET", url);
+      const r = await authed(opts.email, "GET", url);
       if (r.statusCode === 404) return null;
       if (r.statusCode < 200 || r.statusCode >= 300) throw new ApiCallError("GET", url, r.statusCode, r.body);
       return r.json();
     },
     callAs: async (email, password, method, url, body) => {
-      const token = await login(email, password);
-      const r = await raw(token, method, url, body);
+      await login(email, password);
+      const r = await authed(email, method, url, body);
       if (r.statusCode < 200 || r.statusCode >= 300) throw new ApiCallError(method, url, r.statusCode, r.body);
       return r.body ? r.json() : null;
     },
