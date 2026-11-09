@@ -19,7 +19,8 @@
     "seed:pilot": "tsx scripts/seed-pilot-catering.ts",
     "sync-permissions": "node scripts/sync-role-permissions.mjs",
     "cleanup:test-tenants": "tsx scripts/cleanup-test-tenants.ts",
-    "fase1:pilot": "tsx scripts/run-pilot-fase1.ts"
+    "fase1:pilot": "tsx scripts/run-pilot-fase1.ts",
+    "seed:demo-history": "tsx scripts/seed-demo-history.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
