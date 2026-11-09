@@ -7,7 +7,7 @@
  * never from a hardcoded `if status === X` rule.
  */
 import { useT } from "../../i18n/LocaleProvider";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import {
@@ -86,6 +86,43 @@ function lineTotal(qty: string, unit: string): string {
   return fromScale4((scale4(qty) * scale4(unit) + 5000n) / 10000n); // product has 8 decimals
 }
 
+/** One lifecycle section: numbered card, muted with a one-line hint until its prerequisite step is done. */
+function StepSection({
+  id,
+  title,
+  prereq,
+  open,
+  current,
+  isDone,
+  t,
+  children,
+}: {
+  id: string;
+  title: string;
+  prereq: number;
+  open: boolean;
+  current: boolean;
+  isDone: boolean;
+  t: ReturnType<typeof useT>;
+  children: ReactNode;
+}) {
+  return (
+    <div id={id} className="scroll-mt-4">
+      <Card className={open ? (current ? "border-accent-line" : "") : "bg-panel-2 opacity-80"}>
+        <h2 className={`text-sm font-semibold text-ink ${open ? "mb-3" : "mb-1"}`}>
+          {title}
+          {isDone ? (
+            <span className="ml-2 align-middle">
+              <StatusPill tone="success">{t("mo.wod.s.done")}</StatusPill>
+            </span>
+          ) : null}
+        </h2>
+        {open ? children : <p className="text-sm text-ink-faint">{t("mo.wod.locked", { n: prereq })}</p>}
+      </Card>
+    </div>
+  );
+}
+
 export function WorkOrderDetailPage() {
   const t = useT();
   const { workOrderId } = useParams<{ workOrderId: string }>();
@@ -130,6 +167,8 @@ export function WorkOrderDetailPage() {
     unitCost: "",
   });
   const [invoice, setInvoice] = useState<WorkOrderCustomerInvoice | null>(null);
+  const [customerName, setCustomerName] = useState<string | null>(null);
+  const [siteName, setSiteName] = useState<string | null>(null);
   const [markupPct, setMarkupPct] = useState("0");
   const [isTaxable, setIsTaxable] = useState(true);
   const [taxPct, setTaxPct] = useState("11");
@@ -210,6 +249,31 @@ export function WorkOrderDetailPage() {
     };
   }, [token]);
 
+  // Customer / site names are a convenience; tolerate any failure.
+  const lookupCustomerId = detail?.workOrder.customerId ?? null;
+  const lookupSiteId = detail?.workOrder.siteId ?? null;
+  useEffect(() => {
+    if (!lookupCustomerId) return;
+    let cancelled = false;
+    api
+      .customers(token)
+      .then((rows) => {
+        if (!cancelled) setCustomerName(rows.find((c) => c.id === lookupCustomerId)?.name ?? null);
+      })
+      .catch(() => undefined);
+    if (lookupSiteId) {
+      api
+        .sitesForCustomer(token, lookupCustomerId)
+        .then((rows) => {
+          if (!cancelled) setSiteName(rows.find((s) => s.id === lookupSiteId)?.name ?? null);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [token, lookupCustomerId, lookupSiteId]);
+
   async function run(action: () => Promise<unknown>, successMessage: string) {
     setBusy(true);
     setError(null);
@@ -240,12 +304,84 @@ export function WorkOrderDetailPage() {
     return false;
   }
 
-  if (loading) return <Spinner />;
+  if (loading && !detail) return <Spinner />;
   if (!detail) return <Alert tone="error">{error ?? t("mo.wod.msg.notFound")}</Alert>;
 
   const { workOrder, serviceDefinition, checklist, status, availableActions } = detail;
   const costsGrandTotal = sumDecimals(costItems.map((i) => i.totalCost));
   const completedCount = checklist.filter((c) => c.isCompleted).length;
+
+  const requiredOpen = checklist.filter((c) => c.isRequired && !c.isCompleted).length;
+  const assignee = workOrder.assignedToUserId ? users.find((u) => u.id === workOrder.assignedToUserId) : undefined;
+  const priorityLabel = workOrder.priority
+    ? ["low", "medium", "high", "critical"].includes(workOrder.priority)
+      ? t(`mo.woq.priority.${workOrder.priority as "low" | "medium" | "high" | "critical"}`)
+      : workOrder.priority
+    : "—";
+
+  // Lifecycle steps, in order. `done` follows the backend's recorded facts.
+  const done = {
+    assign: Boolean(workOrder.assignedToUserId),
+    execute: Boolean(workOrder.completedAt),
+    verify: Boolean(workOrder.verifiedAt),
+    accept: Boolean(workOrder.customerAcceptedAt),
+    serving: Boolean(servingLog),
+    costs: Boolean(workOrder.costsFinalizedAt),
+    invoice: Boolean(invoice),
+  };
+  const rejected = !done.accept && Boolean(workOrder.customerRejectedAt);
+  // Step 5 (serving) is catering-only, so it is never "the current step".
+  const order = ["assign", "execute", "verify", "accept", "costs", "invoice"] as const;
+  const currentKey = order.find((k) => !done[k]) ?? null;
+  const unlocked = {
+    assign: true,
+    execute: done.assign || Boolean(workOrder.startedAt) || availableActions.length > 0,
+    verify: done.execute,
+    accept: done.verify,
+    serving: done.accept || done.serving,
+    costs: done.accept,
+    invoice: done.costs || done.invoice,
+  };
+  const steps: Array<{
+    key: keyof typeof done;
+    n: number;
+    label: string;
+    date: string | null;
+  }> = [
+    { key: "assign", n: 1, label: t("mo.wod.step.assign"), date: null },
+    { key: "execute", n: 2, label: t("mo.wod.step.execute"), date: workOrder.completedAt ? formatDate(workOrder.completedAt) : null },
+    { key: "verify", n: 3, label: t("mo.wod.step.verify"), date: workOrder.verifiedAt ? formatDate(workOrder.verifiedAt) : null },
+    { key: "accept", n: 4, label: t("mo.wod.step.accept"), date: workOrder.customerAcceptedAt ? formatDate(workOrder.customerAcceptedAt) : null },
+    { key: "serving", n: 5, label: t("mo.wod.step.serving"), date: servingLog ? formatDateShort(servingLog.mealDate) : null },
+    { key: "costs", n: 6, label: t("mo.wod.step.costs"), date: workOrder.costsFinalizedAt ? formatDate(workOrder.costsFinalizedAt) : null },
+    { key: "invoice", n: 7, label: t("mo.wod.step.invoice"), date: invoice ? formatDate(invoice.issuedAt) : null },
+  ];
+
+  function nowText(): string {
+    switch (currentKey) {
+      case "assign":
+        return t("mo.wod.now.assign");
+      case "execute":
+        return workOrder.startedAt ? t("mo.wod.now.inProgress") : t("mo.wod.now.waitStart");
+      case "verify":
+        return t("mo.wod.now.verify");
+      case "accept":
+        return rejected ? t("mo.wod.now.acceptRejected") : t("mo.wod.now.accept");
+      case "costs":
+        return t("mo.wod.now.costs");
+      case "invoice":
+        return t("mo.wod.now.invoice");
+      default:
+        return t("mo.wod.now.complete");
+    }
+  }
+
+  function goToStep(key: keyof typeof done) {
+    document.getElementById(`wo-step-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const secTitle = "text-sm font-semibold text-ink";
+  const mutedText = "text-sm text-ink-faint";
 
   return (
     <div className="space-y-4">
@@ -268,67 +404,127 @@ export function WorkOrderDetailPage() {
       {notice ? <Alert tone="success">{notice}</Alert> : null}
 
       <Card>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("mo.wod.t.details")}</h2>
-        <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+        <h2 className={`mb-3 ${secTitle}`}>{t("mo.wod.flow.title")}</h2>
+        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          {steps.map((s) => {
+            const isDone = done[s.key];
+            const isCurrent = currentKey === s.key;
+            const isRejected = s.key === "accept" && rejected;
+            const circle = isDone
+              ? "bg-status-ok text-white"
+              : isRejected
+                ? "bg-status-danger text-white"
+                : isCurrent
+                  ? "bg-accent text-accent-on"
+                  : "bg-panel-2 text-ink-faint";
+            return (
+              <li key={s.key}>
+                <button
+                  type="button"
+                  onClick={() => goToStep(s.key)}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left ${
+                    isCurrent ? "border-accent-line bg-accent-soft" : "border-line"
+                  }`}
+                >
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${circle}`}
+                    aria-hidden="true"
+                  >
+                    {isDone ? "✓" : s.n}
+                  </span>
+                  <span className="min-w-0">
+                    <span className={`block text-sm font-semibold ${isDone || isCurrent ? "text-ink" : "text-ink-dim"}`}>
+                      {s.n}. {s.label}
+                    </span>
+                    <span className="block text-xs text-ink-faint">
+                      {isDone && s.date
+                        ? s.date
+                        : isRejected
+                          ? t("mo.wod.step.rejectedTag")
+                          : isCurrent
+                            ? t("mo.wod.step.nowTag")
+                            : s.key === "serving"
+                              ? t("mo.wod.step.optionalTag")
+                              : ""}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="mt-4 rounded-lg border border-accent-line bg-accent-soft p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-ink-dim">{t("mo.wod.now.title")}</p>
+          <p className="mt-1 text-base font-semibold text-ink">{nowText()}</p>
+          {currentKey === "costs" && !done.serving ? (
+            <p className="mt-1 text-sm text-ink-dim">{t("mo.wod.now.costsCateringHint")}</p>
+          ) : null}
+          {currentKey ? (
+            <div className="mt-3">
+              <Button variant="secondary" onClick={() => goToStep(currentKey)}>
+                {t("mo.wod.now.goto")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className={`mb-3 ${secTitle}`}>{t("mo.wod.sum.title")}</h2>
+        <p className="text-sm font-semibold text-ink">{workOrder.title}</p>
+        <p className="mt-1 whitespace-pre-line text-sm text-ink-dim">
+          {workOrder.description ?? t("mo.wod.sum.noDescription")}
+        </p>
+        <dl className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-500">{t("mo.wod.f.description")}</dt>
-            <dd className="text-slate-900">{workOrder.description ?? "—"}</dd>
+            <dt className="text-ink-faint">{t("mo.wod.sum.customer")}</dt>
+            <dd className="text-ink">{customerName ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">{t("mo.wod.f.priority")}</dt>
-            <dd className="text-slate-900">{workOrder.priority
-                ? ["low", "medium", "high", "critical"].includes(workOrder.priority)
-                  ? t(`mo.woq.priority.${workOrder.priority as "low" | "medium" | "high" | "critical"}`)
-                  : workOrder.priority
-                : "—"}</dd>
+            <dt className="text-ink-faint">{t("mo.wod.sum.site")}</dt>
+            <dd className="text-ink">{siteName ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">{t("mo.wod.f.plannedStart")}</dt>
-            <dd className="text-slate-900">{formatDate(workOrder.plannedStartAt)}</dd>
+            <dt className="text-ink-faint">{t("mo.wod.sum.serviceType")}</dt>
+            <dd className="text-ink">{serviceDefinition?.name ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">{t("mo.wod.f.due")}</dt>
-            <dd className="text-slate-900">{formatDateShort(workOrder.dueAt)}</dd>
+            <dt className="text-ink-faint">{t("mo.wod.f.priority")}</dt>
+            <dd className="text-ink">{priorityLabel}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">{t("mo.wod.f.started")}</dt>
-            <dd className="text-slate-900">{formatDate(workOrder.startedAt)}</dd>
+            <dt className="text-ink-faint">{t("mo.wod.f.plannedStart")}</dt>
+            <dd className="text-ink">{formatDate(workOrder.plannedStartAt)}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">{t("mo.wod.f.completed")}</dt>
-            <dd className="text-slate-900">{formatDate(workOrder.completedAt)}</dd>
+            <dt className="text-ink-faint">{t("mo.wod.f.due")}</dt>
+            <dd className="text-ink">{formatDateShort(workOrder.dueAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-ink-faint">{t("mo.wod.sum.assignedTo")}</dt>
+            <dd className="text-ink">
+              {workOrder.assignedToUserId ? (assignee?.fullName ?? "—") : t("mo.wod.sum.unassigned")}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-ink-faint">{t("mo.wod.sum.progress")}</dt>
+            <dd className="text-ink">
+              <Badge>
+                {completedCount}/{checklist.length}
+              </Badge>
+            </dd>
           </div>
         </dl>
       </Card>
 
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">
-          {t("mo.wod.t.checklist")}{" "}
-          <Badge>
-            {completedCount}/{checklist.length}
-          </Badge>
-        </h2>
-        {checklist.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("mo.wod.n.thisServiceTypeHasNoChecklist")}</p>
-        ) : (
-          <ul className="space-y-2">
-            {checklist.map((item) => (
-              <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
-                <span className="text-slate-800">
-                  {item.label}
-                  {item.isRequired ? <span className="ml-1 text-rose-600">*</span> : null}
-                </span>
-                <StatusPill tone={item.isCompleted ? "success" : "neutral"}>
-                  {item.isCompleted ? t("mo.wod.s.done") : t("mo.wod.s.pending")}
-                </StatusPill>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("mo.wod.t.assignmentSchedule")}</h2>
+      <StepSection id="wo-step-assign" title={t("mo.wod.sec.assign")} prereq={1} open={unlocked.assign} current={currentKey === "assign"} isDone={done.assign} t={t}>
+        {workOrder.assignedToUserId ? (
+          <p className="mb-3 text-sm text-ink-dim">
+            {t("mo.wod.n.assignedTo", { name: assignee?.fullName ?? "—" })}
+            {workOrder.dueAt ? ` · ${t("mo.wod.f.due")}: ${formatDateShort(workOrder.dueAt)}` : ""}
+          </p>
+        ) : null}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t("mo.wod.f.assignToUserId")}>
             <Select value={assigneeUserId} onChange={(e) => setAssigneeUserId(e.target.value)}>
@@ -370,10 +566,207 @@ export function WorkOrderDetailPage() {
             </Button>
           </div>
         </div>
-      </Card>
+      </StepSection>
 
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("mo.wod.t.servingLog")}</h2>
+      <StepSection id="wo-step-execute" title={t("mo.wod.sec.execute")} prereq={1} open={unlocked.execute} current={currentKey === "execute"} isDone={done.execute} t={t}>
+        <div className="space-y-4">
+          <p className={mutedText}>{t("mo.wod.n.executorDoes")}</p>
+          <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-ink-faint">{t("mo.wod.f.started")}</dt>
+              <dd className="text-ink">{formatDate(workOrder.startedAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-faint">{t("mo.wod.f.completed")}</dt>
+              <dd className="text-ink">{formatDate(workOrder.completedAt)}</dd>
+            </div>
+          </dl>
+          {availableActions.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {availableActions.map((action) => (
+                <Button
+                  key={action.actionCode}
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    run(() => api.actOnWorkOrder(token, workOrder.id, action.actionCode), t("mo.wod.msg.actionRecorded", { name: action.name }))
+                  }
+                >
+                  {action.name}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <p className={mutedText}>{t("mo.wod.n.noActions")}</p>
+          )}
+          <div>
+            <p className="mb-2 text-sm font-semibold text-ink">
+              {t("mo.wod.t.checklist")}{" "}
+              <Badge>
+                {completedCount}/{checklist.length}
+              </Badge>
+              {requiredOpen > 0 ? (
+                <span className="ml-2 text-xs font-normal text-ink-faint">{t("mo.wod.n.openChecklist", { n: requiredOpen })}</span>
+              ) : null}
+            </p>
+        {checklist.length === 0 ? (
+          <p className="text-sm text-slate-500">{t("mo.wod.n.thisServiceTypeHasNoChecklist")}</p>
+        ) : (
+          <ul className="space-y-2">
+            {checklist.map((item) => (
+              <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-slate-800">
+                  {item.label}
+                  {item.isRequired ? <span className="ml-1 text-rose-600">*</span> : null}
+                </span>
+                <StatusPill tone={item.isCompleted ? "success" : "neutral"}>
+                  {item.isCompleted ? t("mo.wod.s.done") : t("mo.wod.s.pending")}
+                </StatusPill>
+              </li>
+            ))}
+          </ul>
+        )}
+          </div>
+          {workOrder.completionNotes ? (
+            <div className="text-sm">
+              <p className="text-ink-faint">{t("mo.wod.f.completionNotes")}</p>
+              <p className="text-ink">{workOrder.completionNotes}</p>
+            </div>
+          ) : null}
+        </div>
+      </StepSection>
+
+      <StepSection id="wo-step-verify" title={t("mo.wod.sec.verify")} prereq={2} open={unlocked.verify} current={currentKey === "verify"} isDone={done.verify} t={t}>
+        {workOrder.verifiedAt ? (
+          <Alert tone="success">
+            {t("mo.wod.msg.verifiedOn", { date: formatDate(workOrder.verifiedAt) })} {workOrder.verificationNotes ?? ""}
+          </Alert>
+        ) : (
+          <>
+          <Field label={t("mo.wod.f.verificationNotes")}>
+            <Textarea
+              rows={3}
+              value={verificationNotes}
+              onChange={(e) => setVerificationNotes(e.target.value)}
+              placeholder={t("mo.wod.p.whatDidYouCheck")}
+            />
+          </Field>
+          <div className="mt-3">
+            <Button
+              disabled={busy}
+              onClick={() =>
+                run(() => api.verifyWorkOrder(token, workOrder.id, verificationNotes || null), t("mo.wod.msg.verified"))
+              }
+            >
+              {t("mo.wod.act.verify")}
+            </Button>
+          </div>
+          </>
+        )}
+      </StepSection>
+
+      <StepSection id="wo-step-accept" title={t("mo.wod.sec.accept")} prereq={3} open={unlocked.accept} current={currentKey === "accept"} isDone={done.accept} t={t}>
+          {workOrder.customerAcceptedAt ? (
+            <div className="space-y-1 text-sm">
+              <StatusPill tone="success">{t("mo.wod.s.accepted")}</StatusPill>
+              <p className="text-slate-600">
+                {formatDate(workOrder.customerAcceptedAt)}
+                {workOrder.customerAcceptedVia
+                  ? ` · ${workOrder.customerAcceptedVia === "token" ? t("mo.wod.s.viaLink") : t("mo.wod.s.viaInternal")}`
+                  : ""}
+              </p>
+              {workOrder.customerAcceptanceComment ? (
+                <p className="text-slate-600">{workOrder.customerAcceptanceComment}</p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-ink-faint">{t("mo.wod.n.acceptanceHint")}</p>
+              {workOrder.customerRejectedAt ? (
+                <Alert tone="warning">
+                  {t("mo.wod.msg.rejectedOn", { date: formatDate(workOrder.customerRejectedAt) })}
+                </Alert>
+              ) : null}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label={t("mo.wod.f.linkValidDays")}>
+                  <Input inputMode="numeric" value={acceptDays} onChange={(e) => setAcceptDays(e.target.value)} />
+                </Field>
+                <div className="flex items-end">
+                  <Button
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      const days = Number(acceptDays.replace(/\D/g, ""));
+                      if (acceptDays.replace(/\D/g, "") === "") {
+                        formOk([t("mo.wod.f.linkValidDays")]);
+                        return;
+                      }
+                      if (!formOk([], [days >= 1 && days <= 365 ? null : t("mo.wod.f.linkValidDays")])) return;
+                      void run(async () => {
+                        setIssuedLink(await api.issueWorkOrderAcceptanceToken(token, workOrder.id, days));
+                      }, t("mo.wod.msg.linkIssued"));
+                    }}
+                  >
+                    {t("mo.wod.act.issueLink")}
+                  </Button>
+                </div>
+              </div>
+              {issuedLink ? (
+                <div className="space-y-2 rounded-md border border-slate-200 p-3 text-sm">
+                  <Field label={t("mo.wod.f.acceptanceLink")}>
+                    <Input
+                      readOnly
+                      value={`${window.location.origin}/api/public/work-orders/acceptance/${issuedLink.token}`}
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                  </Field>
+                  <p className="text-slate-600">
+                    {t("mo.wod.n.linkForCustomer", { date: formatDate(issuedLink.expiresAt) })}
+                  </p>
+                </div>
+              ) : null}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Field label={t("mo.wod.f.acceptComment")}>
+                    <Textarea rows={2} value={acceptComment} onChange={(e) => setAcceptComment(e.target.value)} />
+                  </Field>
+                  <Button
+                    disabled={busy}
+                    onClick={() =>
+                      run(
+                        () => api.customerAcceptWorkOrder(token, workOrder.id, acceptComment.trim() || null),
+                        t("mo.wod.msg.accepted"),
+                      )
+                    }
+                  >
+                    {t("mo.wod.act.recordAcceptance")}
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Field label={t("mo.wod.f.rejectReason")}>
+                    <Textarea rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+                  </Field>
+                  <Button
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!formOk([rejectReason.trim() ? null : t("mo.wod.f.rejectReason")])) return;
+                      void run(
+                        () => api.customerRejectWorkOrder(token, workOrder.id, rejectReason.trim()),
+                        t("mo.wod.msg.rejected"),
+                      );
+                    }}
+                  >
+                    {t("mo.wod.act.recordRejection")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+      </StepSection>
+
+      <StepSection id="wo-step-serving" title={t("mo.wod.sec.serving")} prereq={4} open={unlocked.serving} current={false} isDone={done.serving} t={t}>
+        <p className="mb-3 text-sm text-ink-faint">{t("mo.wod.n.servingOptional")}</p>
         {servingLog ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -510,164 +903,9 @@ export function WorkOrderDetailPage() {
             </div>
           </div>
         )}
-      </Card>
+      </StepSection>
 
-      {availableActions.length > 0 ? (
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("mo.wod.t.lifecycle")}</h2>
-          <div className="flex flex-wrap gap-2">
-            {availableActions.map((action) => (
-              <Button
-                key={action.actionCode}
-                variant="secondary"
-                disabled={busy}
-                onClick={() =>
-                  run(() => api.actOnWorkOrder(token, workOrder.id, action.actionCode), t("mo.wod.msg.actionRecorded", { name: action.name }))
-                }
-              >
-                {action.name}
-              </Button>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      {workOrder.completedAt && !workOrder.verifiedAt ? (
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("mo.wod.t.verification")}</h2>
-          <Field label={t("mo.wod.f.verificationNotes")}>
-            <Textarea
-              rows={3}
-              value={verificationNotes}
-              onChange={(e) => setVerificationNotes(e.target.value)}
-              placeholder={t("mo.wod.p.whatDidYouCheck")}
-            />
-          </Field>
-          <div className="mt-3">
-            <Button
-              disabled={busy}
-              onClick={() =>
-                run(() => api.verifyWorkOrder(token, workOrder.id, verificationNotes || null), t("mo.wod.msg.verified"))
-              }
-            >
-              {t("mo.wod.act.verify")}
-            </Button>
-          </div>
-        </Card>
-      ) : null}
-
-      {workOrder.verifiedAt ? (
-        <Alert tone="success">
-          {t("mo.wod.msg.verifiedOn", { date: formatDate(workOrder.verifiedAt) })} {workOrder.verificationNotes ?? ""}
-        </Alert>
-      ) : null}
-
-      {workOrder.verifiedAt ? (
-        <Card>
-          <h2 className="mb-1 text-sm font-semibold text-slate-800">{t("mo.wod.t.acceptance")}</h2>
-          {workOrder.customerAcceptedAt ? (
-            <div className="space-y-1 text-sm">
-              <StatusPill tone="success">{t("mo.wod.s.accepted")}</StatusPill>
-              <p className="text-slate-600">
-                {formatDate(workOrder.customerAcceptedAt)}
-                {workOrder.customerAcceptedVia
-                  ? ` · ${workOrder.customerAcceptedVia === "token" ? t("mo.wod.s.viaLink") : t("mo.wod.s.viaInternal")}`
-                  : ""}
-              </p>
-              {workOrder.customerAcceptanceComment ? (
-                <p className="text-slate-600">{workOrder.customerAcceptanceComment}</p>
-              ) : null}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-ink-faint">{t("mo.wod.n.acceptanceHint")}</p>
-              {workOrder.customerRejectedAt ? (
-                <Alert tone="warning">
-                  {t("mo.wod.msg.rejectedOn", { date: formatDate(workOrder.customerRejectedAt) })}
-                </Alert>
-              ) : null}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Field label={t("mo.wod.f.linkValidDays")}>
-                  <Input inputMode="numeric" value={acceptDays} onChange={(e) => setAcceptDays(e.target.value)} />
-                </Field>
-                <div className="flex items-end">
-                  <Button
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      const days = Number(acceptDays.replace(/\D/g, ""));
-                      if (acceptDays.replace(/\D/g, "") === "") {
-                        formOk([t("mo.wod.f.linkValidDays")]);
-                        return;
-                      }
-                      if (!formOk([], [days >= 1 && days <= 365 ? null : t("mo.wod.f.linkValidDays")])) return;
-                      void run(async () => {
-                        setIssuedLink(await api.issueWorkOrderAcceptanceToken(token, workOrder.id, days));
-                      }, t("mo.wod.msg.linkIssued"));
-                    }}
-                  >
-                    {t("mo.wod.act.issueLink")}
-                  </Button>
-                </div>
-              </div>
-              {issuedLink ? (
-                <div className="space-y-2 rounded-md border border-slate-200 p-3 text-sm">
-                  <Field label={t("mo.wod.f.acceptanceLink")}>
-                    <Input
-                      readOnly
-                      value={`${window.location.origin}/api/public/work-orders/acceptance/${issuedLink.token}`}
-                      onFocus={(e) => e.currentTarget.select()}
-                    />
-                  </Field>
-                  <p className="text-slate-600">
-                    {t("mo.wod.n.linkForCustomer", { date: formatDate(issuedLink.expiresAt) })}
-                  </p>
-                </div>
-              ) : null}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Field label={t("mo.wod.f.acceptComment")}>
-                    <Textarea rows={2} value={acceptComment} onChange={(e) => setAcceptComment(e.target.value)} />
-                  </Field>
-                  <Button
-                    disabled={busy}
-                    onClick={() =>
-                      run(
-                        () => api.customerAcceptWorkOrder(token, workOrder.id, acceptComment.trim() || null),
-                        t("mo.wod.msg.accepted"),
-                      )
-                    }
-                  >
-                    {t("mo.wod.act.recordAcceptance")}
-                  </Button>
-                </div>
-                <div className="space-y-2">
-                  <Field label={t("mo.wod.f.rejectReason")}>
-                    <Textarea rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
-                  </Field>
-                  <Button
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      if (!formOk([rejectReason.trim() ? null : t("mo.wod.f.rejectReason")])) return;
-                      void run(
-                        () => api.customerRejectWorkOrder(token, workOrder.id, rejectReason.trim()),
-                        t("mo.wod.msg.rejected"),
-                      );
-                    }}
-                  >
-                    {t("mo.wod.act.recordRejection")}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </Card>
-      ) : null}
-
-      {workOrder.verifiedAt ? (
-        <Card>
-          <h2 className="mb-1 text-sm font-semibold text-slate-800">{t("mo.wod.t.costs")}</h2>
+      <StepSection id="wo-step-costs" title={t("mo.wod.sec.costs")} prereq={4} open={unlocked.costs} current={currentKey === "costs"} isDone={done.costs} t={t}>
           {!workOrder.customerAcceptedAt ? (
             <p className="text-sm text-ink-faint">{t("mo.wod.n.costsNeedAcceptance")}</p>
           ) : (
@@ -802,12 +1040,9 @@ export function WorkOrderDetailPage() {
               ) : null}
             </div>
           )}
-        </Card>
-      ) : null}
+      </StepSection>
 
-      {workOrder.verifiedAt ? (
-        <Card>
-          <h2 className="mb-1 text-sm font-semibold text-slate-800">{t("mo.wod.t.invoice")}</h2>
+      <StepSection id="wo-step-invoice" title={t("mo.wod.sec.invoice")} prereq={6} open={unlocked.invoice} current={currentKey === "invoice"} isDone={done.invoice} t={t}>
           {invoice ? (
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
               <div>
@@ -909,8 +1144,7 @@ export function WorkOrderDetailPage() {
               </Button>
             </div>
           )}
-        </Card>
-      ) : null}
+      </StepSection>
     </div>
   );
 }
