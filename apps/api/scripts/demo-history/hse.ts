@@ -824,8 +824,18 @@ export async function run(ctx: DemoCtx): Promise<void> {
     if (haveRA.has(r.title) || r.date > today) continue;
     const key = r.rec ? plan.find((p) => p.key === r.rec)?.key : undefined;
     const hseRecordId = key ? recId.get(key) ?? null : null;
+    // The API requires an HSE record or a project. Projects are seeded after
+    // HSE, so on a fresh tenant some may not exist yet: skip and let a re-run
+    // (or the runner's second pass) pick them up.
+    const projectId = hseRecordId
+      ? null
+      : (r.project ? projId.get(r.project) : undefined) ?? projId.get("PRJ-001") ?? [...projId.values()][0] ?? null;
+    if (!hseRecordId && !projectId) {
+      ctx.log("hse", `risk assessment "${r.title}" waits for its project — re-run hse after projects`);
+      continue;
+    }
     const ra = await hse("POST", "/hse/advanced/risk-assessments", {
-      hseRecordId, projectId: hseRecordId ? null : projId.get(r.project ?? "PRJ-001") ?? null,
+      hseRecordId, projectId,
       assessmentType: r.type, title: r.title, taskDescription: r.task, matrixId: matrix.id,
       likelihood: r.l, severity: r.s, residualLikelihood: r.rl, residualSeverity: r.rs,
       controls: r.controls.map(([description, controlType]) => ({ description, controlType, residualLikelihood: r.rl, residualSeverity: r.rs })),

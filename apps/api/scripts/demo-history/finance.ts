@@ -587,12 +587,13 @@ function buildWorld(ctx: DemoCtx, input: WorldInput): World {
     if (!isPast(date)) continue;
     const pr = input.payroll.get(m);
     const idx = months.indexOf(m);
-    const gross = pr?.gross ?? 440_000_000 + idx * 7_500_000;
+    const gross = r0(pr?.gross ?? 440_000_000 + idx * 7_500_000);
     const ded = pr?.deductions ?? gross * 0.093;
     const net = pr?.net ?? gross - ded;
     const emp = pr?.employer ?? gross * 0.0875;
     const pph21 = r0(ded * 0.46);
-    const bpjs = r0(ded - pph21 + emp);
+    // Plug the BPJS line so the journal balances to the rupiah after rounding.
+    const bpjs = gross + r0(emp) - r0(net) - pph21;
     const direct = r0(gross * 0.62);
     world.journals.push({
       num: `FIN-PAYROLL-${m}`,
