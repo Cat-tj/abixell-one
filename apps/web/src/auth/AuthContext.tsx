@@ -8,7 +8,7 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 
 interface Session {
   accessToken: string;
@@ -178,6 +178,72 @@ export function AuthProvider({ children }: PropsWithChildren) {
     // suppression comment is needed (an unused one would itself fail
     // lint, as happened once already in Checkpoint 0E).
   }, []);
+
+  // Keep the access token alive while the app stays open. Its TTL is 15
+  // minutes (jwt.ts) and the mount effect above only refreshes on page
+  // load, so without this every API call started failing with "Invalid or
+  // expired access token" a quarter of an hour into a session. Refresh
+  // every 12 minutes, and when the tab becomes visible again (background
+  // timers are throttled, so the interval alone can miss the window).
+  const lastRefreshAt = useRef(0);
+  const refreshInFlight = useRef(false);
+  const signedIn = session !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    const REFRESH_EVERY_MS = 12 * 60 * 1000;
+    lastRefreshAt.current = Date.now();
+
+    const refreshNow = () => {
+      if (refreshInFlight.current) return;
+      // Another tab may have rotated the refresh token already; the
+      // persisted copy is always the newest one.
+      const latest = readPersistedSession();
+      if (!latest) return;
+      refreshInFlight.current = true;
+      api
+        .refresh(latest.refreshToken)
+        .then((result) => {
+          const next: Session = { ...latest, ...result };
+          lastRefreshAt.current = Date.now();
+          setSession(next);
+          persistSession(next);
+        })
+        .catch((err) => {
+          // Only a rejected refresh token ends the session; a network
+          // blip just waits for the next attempt.
+          if (err instanceof ApiError && err.status === 401) {
+            setSession(null);
+            persistSession(null);
+          }
+        })
+        .finally(() => {
+          refreshInFlight.current = false;
+        });
+    };
+
+    const timer = window.setInterval(refreshNow, REFRESH_EVERY_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastRefreshAt.current >= REFRESH_EVERY_MS) {
+        refreshNow();
+      }
+    };
+    // Pick up a token another tab just refreshed instead of using a stale one.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY) return;
+      const latest = readPersistedSession();
+      if (latest) {
+        lastRefreshAt.current = Date.now();
+        setSession(latest);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [signedIn]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ session, initializing, login, updateSession, logout }),

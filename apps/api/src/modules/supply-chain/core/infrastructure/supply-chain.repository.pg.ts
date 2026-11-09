@@ -11,6 +11,7 @@ import type {
   PurchaseRequest,
   PurchaseRequestLine,
   RecordMovementInput,
+  ScmGrade,
   StockBalance,
   StockMovement,
   Supplier,
@@ -39,8 +40,8 @@ export class PgSupplyChainRepository implements SupplyChainRepository {
 
   async createItem(input: CreateItemInput): Promise<Item> {
     const r = await this.pool.query(
-      `INSERT INTO items (tenant_id, code, name, description, category, unit_of_measure, created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$7) RETURNING *`,
+      `INSERT INTO items (tenant_id, code, name, description, category, unit_of_measure, grade, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING *`,
       [
         input.tenantId,
         input.code,
@@ -48,6 +49,7 @@ export class PgSupplyChainRepository implements SupplyChainRepository {
         input.description ?? null,
         input.category ?? null,
         input.unitOfMeasure,
+        input.grade ?? null,
         input.createdBy,
       ],
     );
@@ -84,15 +86,45 @@ export class PgSupplyChainRepository implements SupplyChainRepository {
 
   async updateItem(
     id: string,
-    input: { name?: string; description?: string | null; category?: string | null; isActive?: boolean },
+    input: {
+      name?: string;
+      description?: string | null;
+      category?: string | null;
+      grade?: ScmGrade | null;
+      isActive?: boolean;
+    },
+    updatedBy: string | null,
+    guard?: (db: Pick<PoolClient, "query">) => Promise<void>,
+  ): Promise<Item | null> {
+    // Lock the item row so a concurrent WMS movement (FOR SHARE on the item in
+    // recordMovementTx) and this regrade serialise; the guard sees committed stock.
+    return this.inTransaction(async (client) => {
+      const locked = await client.query(`SELECT id FROM items WHERE id = $1 FOR UPDATE`, [id]);
+      if (!locked.rows[0]) return null;
+      if (guard) await guard(client);
+      return this.updateItemRow(client, id, input, updatedBy);
+    });
+  }
+
+  private async updateItemRow(
+    db: Pick<PoolClient, "query">,
+    id: string,
+    input: {
+      name?: string;
+      description?: string | null;
+      category?: string | null;
+      grade?: ScmGrade | null;
+      isActive?: boolean;
+    },
     updatedBy: string | null,
   ): Promise<Item | null> {
-    const r = await this.pool.query(
+    const r = await db.query(
       `UPDATE items
           SET name = COALESCE($2, name),
               description = CASE WHEN $3::boolean THEN $4 ELSE description END,
               category = CASE WHEN $5::boolean THEN $6 ELSE category END,
               is_active = COALESCE($7, is_active),
+              grade = CASE WHEN $9::boolean THEN $10 ELSE grade END,
               updated_by = $8, updated_at = now()
         WHERE id = $1 RETURNING *`,
       [
@@ -104,6 +136,8 @@ export class PgSupplyChainRepository implements SupplyChainRepository {
         input.category ?? null,
         input.isActive ?? null,
         updatedBy,
+        input.grade !== undefined,
+        input.grade ?? null,
       ],
     );
     return r.rows[0] ? toItem(r.rows[0]) : null;
@@ -612,6 +646,7 @@ function toItem(r: QueryResultRow): Item {
     description: r.description,
     category: r.category,
     unitOfMeasure: r.unit_of_measure,
+    grade: r.grade ?? null,
     isActive: r.is_active,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

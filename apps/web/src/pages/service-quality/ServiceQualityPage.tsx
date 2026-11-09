@@ -475,7 +475,7 @@ export function ServiceQualityPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {slaPerformance.map((perf) => (
                   <Card key={perf.status} className="p-3">
-                    <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <div className="text-xs font-bold text-slate-500r">
                       {perf.status}
                     </div>
                     <div className="text-xl font-bold text-slate-900 mt-1">
@@ -615,7 +615,7 @@ export function ServiceQualityPage() {
 
                 {/* CAPA Summary */}
                 <Card className="p-3 space-y-2">
-                  <div className="text-xs font-semibold uppercase text-slate-600">{t("sq.main.t.capaEffectiveness")}</div>
+                  <div className="text-xs font-bold text-slate-600">{t("sq.main.t.capaEffectiveness")}</div>
                   {capaSummary.map((sum) => (
                     <div key={sum.status} className="flex justify-between text-xs py-1 border-b border-slate-100">
                       <span className="text-slate-600">{sum.status}:</span>
@@ -799,7 +799,7 @@ export function ServiceQualityPage() {
                     </div>
 
                     <div className="pt-2 border-t border-slate-200">
-                      <div className="text-xs font-semibold uppercase text-slate-600 mb-1">
+                      <div className="text-xs font-bold text-slate-600 mb-1">
                         Action Parameters
                       </div>
                       <pre className="p-2 bg-slate-50 rounded border border-slate-200 text-xs font-mono overflow-x-auto text-slate-700">

@@ -403,10 +403,10 @@ export function ComplaintConfigPage() {
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-slate-500">{t("complaintConfig.step")}</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-slate-500">{t("complaintConfig.slaHours")}</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-slate-500">{t("complaintConfig.actions")}</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-slate-500">{t("complaintConfig.assignedTo")}</th>
+                      <th className="px-3 py-2 text-left text-xs font-bold text-slate-500">{t("complaintConfig.step")}</th>
+                      <th className="px-3 py-2 text-left text-xs font-bold text-slate-500">{t("complaintConfig.slaHours")}</th>
+                      <th className="px-3 py-2 text-left text-xs font-bold text-slate-500">{t("complaintConfig.actions")}</th>
+                      <th className="px-3 py-2 text-left text-xs font-bold text-slate-500">{t("complaintConfig.assignedTo")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">

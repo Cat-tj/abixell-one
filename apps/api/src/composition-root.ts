@@ -145,6 +145,7 @@ import { TaxService } from "./modules/accounting/tax/application/tax.service.js"
 import { PgConsolidationRepository } from "./modules/accounting/consolidation/infrastructure/consolidation.repository.pg.js";
 import { ConsolidationService } from "./modules/accounting/consolidation/application/consolidation.service.js";
 import { AccountingEventConsumerService } from "./modules/accounting/consumer/accounting-event-consumer.service.js";
+import { PgItemStockExposurePort } from "./modules/supply-chain/ports/item-stock-exposure-port.js";
 import { PgAccountingEventWritePort } from "./modules/supply-chain/ports/accounting-event.port.pg.js";
 import { PgHseRepository } from "./modules/hse/core/infrastructure/hse.repository.pg.js";
 import { HseService } from "./modules/hse/core/application/hse.service.js";
@@ -402,6 +403,7 @@ export function buildContainer() {
     audit,
     rbac,
     eventBus,
+    new PgItemStockExposurePort(),
   );
 
   // Phase 6 — Finance Core.

@@ -47,6 +47,8 @@ export function CashflowPage() {
   const [accountCode, setAccountCode] = useState("");
 
   const load = useCallback(async () => {
+    // Don't refetch with a half-cleared range: the API would 400 and blank the page.
+    if (!from || !to) return;
     setLoading(true);
     setError(null);
     try {
@@ -135,23 +137,23 @@ export function CashflowPage() {
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("finCashflow.opening")}</p>
+              <p className="text-xs font-bold text-ink-faint">{t("finCashflow.opening")}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-ink">{formatMoney(result.opening)}</p>
             </Card>
             <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("fin.money.in")}</p>
+              <p className="text-xs font-bold text-ink-faint">{t("fin.money.in")}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-status-ok">
                 {formatMoney(result.totals.income)}
               </p>
             </Card>
             <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("fin.money.out")}</p>
+              <p className="text-xs font-bold text-ink-faint">{t("fin.money.out")}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-ink">
                 {formatMoney(result.totals.expense)}
               </p>
             </Card>
             <Card>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("finCashflow.closing")}</p>
+              <p className="text-xs font-bold text-ink-faint">{t("finCashflow.closing")}</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-ink">{formatMoney(result.closing)}</p>
               <p className="mt-1 text-xs text-ink-faint">
                 {t("finCashflow.net", { amount: formatMoney(result.totals.net) })}

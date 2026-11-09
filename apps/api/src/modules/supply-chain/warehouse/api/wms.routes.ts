@@ -79,6 +79,7 @@ const createWarehouseSchema = z.object({
   siteId: z.string().uuid().nullable().optional(),
   organizationUnitId: z.string().uuid().nullable().optional(),
   address: z.string().nullable().optional(),
+  grade: z.enum(["food", "non_food"]).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 const updateWarehouseSchema = z.object({
@@ -86,6 +87,7 @@ const updateWarehouseSchema = z.object({
   siteId: z.string().uuid().nullable().optional(),
   organizationUnitId: z.string().uuid().nullable().optional(),
   address: z.string().nullable().optional(),
+  grade: z.enum(["food", "non_food"]).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 const createWarehouseLocationSchema = z.object({

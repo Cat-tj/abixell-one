@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 /**
  * Supply Chain Core — domain types (Phase 4).
  *
@@ -13,6 +14,11 @@
 
 export type MovementType = "in" | "out";
 
+/** Food-grade classification shared by items and warehouses. NULL on either
+ * side means unclassified (legacy / unrestricted). See
+ * advanced/domain/grade-policy.ts for the matching rules. */
+export type ScmGrade = "food" | "non_food";
+
 /** Derived from `convertedPurchaseOrderId` — deliberately not a stored
  * status, so intake bookkeeping never becomes a second lifecycle beside the
  * Workflow Engine (which owns the PR approval lifecycle). */
@@ -26,6 +32,7 @@ export interface Item {
   description: string | null;
   category: string | null;
   unitOfMeasure: string;
+  grade: ScmGrade | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -144,6 +151,7 @@ export interface CreateItemInput {
   description?: string | null;
   category?: string | null;
   unitOfMeasure: string;
+  grade?: ScmGrade | null;
   createdBy: string | null;
 }
 
@@ -210,8 +218,16 @@ export interface SupplyChainRepository {
   listItems(tenantId: string, filter: { search?: string; isActive?: boolean }): Promise<Item[]>;
   updateItem(
     id: string,
-    input: { name?: string; description?: string | null; category?: string | null; isActive?: boolean },
+    input: {
+      name?: string;
+      description?: string | null;
+      category?: string | null;
+      grade?: ScmGrade | null;
+      isActive?: boolean;
+    },
     updatedBy: string | null,
+    /** Runs inside the transaction that holds `FOR UPDATE` on the item row, before the UPDATE (regrade guard). */
+    guard?: (db: Pick<PoolClient, "query">) => Promise<void>,
   ): Promise<Item | null>;
 
   // --- Supplier master (SCM-CORE-002) --------------------------------

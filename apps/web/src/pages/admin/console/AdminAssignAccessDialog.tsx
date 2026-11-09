@@ -93,7 +93,24 @@ export function AssignAccessDialog({
   }, [onClose, pending]);
 
   async function requestPreview() {
-    if (pending || pairs.length === 0) return;
+    if (pending) return;
+    if (pairs.length === 0) {
+      setError(t("assignAccess.needPair"));
+      return;
+    }
+    const badIndex = pairs.findIndex(
+      (pair) =>
+        pair.scopeType === "customer" ||
+        (pair.scopeType === "tenant" &&
+          optionsState.options !== null &&
+          !optionsState.options.canAssignTenantScope),
+    );
+    if (badIndex >= 0) {
+      setError(
+        t("common.form.invalid", { fields: t("pairEditor.scopeLabel", { index: badIndex + 1 }) }),
+      );
+      return;
+    }
     setStep("previewing");
     setError(null);
     try {
@@ -193,14 +210,7 @@ export function AssignAccessDialog({
   // Read once so the closure below narrows: a property access on state inside
   // a callback cannot rely on the `||` chain's narrowing of it.
   const options = optionsState.options;
-  const reviewDisabled =
-    pairs.length === 0 ||
-    options === null ||
-    pairs.some(
-      (pair) =>
-        pair.scopeType === "customer" ||
-        (pair.scopeType === "tenant" && !options.canAssignTenantScope),
-    );
+  const reviewDisabled = options === null;
 
   return (
     <OverlayDialog

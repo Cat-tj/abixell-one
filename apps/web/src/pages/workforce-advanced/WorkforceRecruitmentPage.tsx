@@ -137,6 +137,23 @@ export function WorkforceRecruitmentPage() {
     [postings],
   );
 
+  // Reports missing/invalid fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>, invalid: Array<[boolean, string]> = []): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return false;
+    }
+    const bad = invalid.filter(([isBad]) => isBad).map(([, label]) => label);
+    if (bad.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: bad.join(", ") }));
+      return false;
+    }
+    return true;
+  }
+
   async function runAction(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError(null);
@@ -153,6 +170,7 @@ export function WorkforceRecruitmentPage() {
   }
 
   async function createPosting() {
+    if (!requireFields([[postingTitle.trim(), t("wf.recruit.f.title")]])) return;
     await runAction(
       () => api.createWorkforceJobPosting(token, {
         title: postingTitle.trim(),
@@ -169,7 +187,7 @@ export function WorkforceRecruitmentPage() {
 
   async function actOnPosting(id: string) {
     const actionCode = postingActionById[id]?.trim();
-    if (!actionCode) return;
+    if (!requireFields([[actionCode, t("wf.recruit.p.actionCode")]])) return;
     await runAction(
       () => api.actOnWorkforceJobPosting(token, id, actionCode, null),
       `Job posting updated via action ${label(actionCode)}.`,
@@ -177,7 +195,7 @@ export function WorkforceRecruitmentPage() {
   }
 
   async function createApplication() {
-    if (!selectedPostingId) return;
+    if (!requireFields([[selectedPostingId, t("wf.recruit.f.opening")], [candidateName.trim(), t("wf.recruit.f.candidateFullName")]])) return;
     await runAction(
       () => api.createWorkforceJobApplication(token, {
         jobPostingId: selectedPostingId,
@@ -195,8 +213,9 @@ export function WorkforceRecruitmentPage() {
   }
 
   async function advanceStage(id: string) {
-    const stage = nextStageById[id];
-    if (!stage) return;
+    // The select displays the current stage until changed, so fall back to it.
+    const stage = nextStageById[id] ?? applications.find((item) => item.id === id)?.stage;
+    if (!requireFields([[stage, t("wf.recruit.f.pipelineStage")]]) || !stage) return;
     await runAction(
       () => api.advanceWorkforceJobApplication(token, id, {
         stage,
@@ -241,7 +260,7 @@ export function WorkforceRecruitmentPage() {
           <Button
             variant="secondary"
             className="text-xs"
-            disabled={busy || !postingActionById[jobPosting.id]?.trim()}
+            disabled={busy}
             onClick={() => void actOnPosting(jobPosting.id)}
           >
             Apply
@@ -371,7 +390,7 @@ export function WorkforceRecruitmentPage() {
             <Field label={t("wf.recruit.f.employmentType")}><Select value={employmentType} onChange={(event) => setEmploymentType(event.target.value)}><option value="full_time">{t("wf.recruit.t.fullTime")}</option><option value="contract">{t("wf.recruit.t.contract")}</option><option value="temporary">{t("wf.recruit.t.temporary")}</option></Select></Field>
             <div className="sm:col-span-2 lg:col-span-4"><Field label={t("wf.recruit.f.jobDescription")}><Textarea rows={2} value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} /></Field></div>
           </div>
-          <Button className="mt-3" disabled={busy || !postingTitle.trim()} onClick={() => void createPosting()}>{t("wf.recruit.t.publishOpening")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createPosting()}>{t("wf.recruit.t.publishOpening")}</Button>
         </Card>
       ) : null}
 
@@ -390,7 +409,7 @@ export function WorkforceRecruitmentPage() {
             <Field label={t("wf.recruit.f.candidatePhone")}><Input value={candidatePhone} onChange={(event) => setCandidatePhone(event.target.value)} /></Field>
             <Field label={t("wf.recruit.f.resumeDocumentId")}><Input value={resumeId} onChange={(event) => setResumeId(event.target.value)} placeholder={t("wf.recruit.p.optionalDocumentId")} /></Field>
           </div>
-          <Button className="mt-3" disabled={busy || !selectedPostingId || !candidateName.trim()} onClick={() => void createApplication()}>{t("wf.recruit.t.recordApplication")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createApplication()}>{t("wf.recruit.t.recordApplication")}</Button>
         </Card>
       ) : null}
 

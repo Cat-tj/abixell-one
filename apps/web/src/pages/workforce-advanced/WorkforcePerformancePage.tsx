@@ -34,6 +34,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDateShort, statusTone } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 function label(value: string): string {
   return value.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -170,6 +171,15 @@ export function WorkforcePerformancePage() {
     [courses],
   );
 
+  // Reports missing required fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length === 0) return true;
+    setNotice(null);
+    setError(t("common.form.missing", { fields: missing.join(", ") }));
+    return false;
+  }
+
   async function runAction(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError(null);
@@ -186,6 +196,7 @@ export function WorkforcePerformancePage() {
   }
 
   async function createCompetency() {
+    if (!requireFields([[compCode.trim(), t("wf.perf.f.code")], [compName.trim(), t("wf.perf.f.name")]])) return;
     await runAction(
       () => api.createWorkforceCompetency(token, {
         code: compCode.trim(),
@@ -201,6 +212,11 @@ export function WorkforcePerformancePage() {
   }
 
   async function assessCompetency() {
+    if (!requireFields([
+      [assessEmployeeId, t("wf.perf.f.employee")],
+      [assessCompetencyId, t("wf.perf.f.competency")],
+      [assessLevel.trim(), t("wf.perf.f.proficiencyLevel")],
+    ])) return;
     await runAction(
       () => api.assessWorkforceEmployeeCompetency(token, {
         employeeId: assessEmployeeId,
@@ -214,6 +230,7 @@ export function WorkforcePerformancePage() {
   }
 
   async function createCourse() {
+    if (!requireFields([[courseCode.trim(), t("wf.perf.f.courseCode")], [courseTitle.trim(), t("wf.perf.f.title")]])) return;
     await runAction(
       () => api.createWorkforceTrainingCourse(token, {
         courseCode: courseCode.trim(),
@@ -230,6 +247,7 @@ export function WorkforcePerformancePage() {
   }
 
   async function enrollEmployee() {
+    if (!requireFields([[enrollEmployeeId, t("wf.perf.f.employee")], [enrollCourseId, t("wf.perf.f.course")]])) return;
     await runAction(
       () => api.enrollWorkforceTraining(token, {
         trainingCourseId: enrollCourseId,
@@ -243,13 +261,18 @@ export function WorkforcePerformancePage() {
     await runAction(
       () => api.completeWorkforceTraining(token, id, {
         status: "completed",
-        completionDate: new Date().toISOString().slice(0, 10),
+        completionDate: localDateInputValue(),
       }),
       "Training marked as completed.",
     );
   }
 
   async function createReview() {
+    if (!requireFields([
+      [reviewEmployeeId, t("wf.perf.f.employee")],
+      [reviewStart, t("wf.perf.f.periodStart")],
+      [reviewEnd, t("wf.perf.f.periodEnd")],
+    ])) return;
     await runAction(
       () => api.createWorkforcePerformanceReview(token, {
         employeeId: reviewEmployeeId,
@@ -269,7 +292,7 @@ export function WorkforcePerformancePage() {
 
   async function actOnReview(id: string) {
     const actionCode = reviewActionById[id]?.trim();
-    if (!actionCode) return;
+    if (!requireFields([[actionCode, t("wf.perf.p.action")]])) return;
     await runAction(
       () => api.actOnWorkforcePerformanceReview(token, id, actionCode, null),
       `Performance review updated via ${label(actionCode)}.`,
@@ -277,6 +300,7 @@ export function WorkforcePerformancePage() {
   }
 
   async function createCareerPath() {
+    if (!requireFields([[fromPositionId, t("wf.perf.f.fromPosition")], [toPositionId, t("wf.perf.f.toTargetPosition")]])) return;
     await runAction(
       () => api.createWorkforceCareerPath(token, {
         fromPositionId,
@@ -323,7 +347,7 @@ export function WorkforcePerformancePage() {
           <Button
             variant="secondary"
             className="text-xs"
-            disabled={busy || !reviewActionById[review.id]?.trim()}
+            disabled={busy}
             onClick={() => void actOnReview(review.id)}
           >
             Run
@@ -444,7 +468,7 @@ export function WorkforcePerformancePage() {
             <div className="sm:col-span-2 lg:col-span-4"><Field label={t("wf.perf.f.reviewNotes")}><Textarea rows={2} value={reviewNotes} onChange={(event) => setReviewNotes(event.target.value)} /></Field></div>
             <div className="sm:col-span-2 lg:col-span-4"><Field label={t("wf.perf.f.developmentPlan")}><Textarea rows={2} value={developmentPlan} onChange={(event) => setDevelopmentPlan(event.target.value)} /></Field></div>
           </div>
-          <Button className="mt-3" disabled={busy || !reviewEmployeeId || !reviewStart || !reviewEnd} onClick={() => void createReview()}>{t("wf.perf.t.submitPerformanceAppraisal")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createReview()}>{t("wf.perf.t.submitPerformanceAppraisal")}</Button>
         </Card>
       ) : null}
 
@@ -453,7 +477,7 @@ export function WorkforcePerformancePage() {
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("wf.perf.t.addCompetencyDefinition")}</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label={t("wf.perf.f.code")} required><Input value={compCode} onChange={(event) => setCompCode(event.target.value)} placeholder="LEADERSHIP" /></Field>
+              <Field label={t("wf.perf.f.code")} required><Input value={compCode} onChange={(event) => setCompCode(event.target.value)} placeholder={t("common.form.example", { value: "LEADERSHIP" })} /></Field>
               <Field label={t("wf.perf.f.name")} required><Input value={compName} onChange={(event) => setCompName(event.target.value)} placeholder={t("wf.perf.p.teamLeadership")} /></Field>
               <Field label={t("wf.perf.f.category")}><Input value={compCategory} onChange={(event) => setCompCategory(event.target.value)} /></Field>
               <div className="grid grid-cols-2 gap-2">
@@ -461,7 +485,7 @@ export function WorkforcePerformancePage() {
                 <Field label={t("wf.perf.f.max")}><Input type="number" min="1" value={scaleMax} onChange={(event) => setScaleMax(event.target.value)} /></Field>
               </div>
             </div>
-            <Button className="mt-3" disabled={busy || !compCode.trim() || !compName.trim()} onClick={() => void createCompetency()}>{t("wf.perf.t.saveCompetency")}</Button>
+            <Button className="mt-3" disabled={busy} onClick={() => void createCompetency()}>{t("wf.perf.t.saveCompetency")}</Button>
           </Card>
 
           <Card>
@@ -472,7 +496,7 @@ export function WorkforcePerformancePage() {
               <Field label={t("wf.perf.f.proficiencyLevel")} required><Input type="number" min="1" max="10" value={assessLevel} onChange={(event) => setAssessLevel(event.target.value)} /></Field>
               <Field label={t("wf.perf.f.assessmentNotes")}><Input value={assessNotes} onChange={(event) => setAssessNotes(event.target.value)} /></Field>
             </div>
-            <Button className="mt-3" disabled={busy || !assessEmployeeId || !assessCompetencyId} onClick={() => void assessCompetency()}>{t("wf.perf.t.saveAssessment")}</Button>
+            <Button className="mt-3" disabled={busy} onClick={() => void assessCompetency()}>{t("wf.perf.t.saveAssessment")}</Button>
           </Card>
         </div>
       ) : null}
@@ -482,7 +506,7 @@ export function WorkforcePerformancePage() {
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("wf.perf.t.addTrainingCourse")}</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label={t("wf.perf.f.courseCode")} required><Input value={courseCode} onChange={(event) => setCourseCode(event.target.value)} placeholder="SAFE_001" /></Field>
+              <Field label={t("wf.perf.f.courseCode")} required><Input value={courseCode} onChange={(event) => setCourseCode(event.target.value)} placeholder={t("common.form.example", { value: "SAFE_001" })} /></Field>
               <Field label={t("wf.perf.f.title")} required><Input value={courseTitle} onChange={(event) => setCourseTitle(event.target.value)} placeholder={t("wf.perf.p.fieldSafetyProtocol")} /></Field>
               <Field label={t("wf.perf.f.provider")}><Input value={courseProvider} onChange={(event) => setCourseProvider(event.target.value)} /></Field>
               <Field label={t("wf.perf.f.durationHours")}><Input type="number" min="1" value={durationHours} onChange={(event) => setDurationHours(event.target.value)} /></Field>
@@ -495,7 +519,7 @@ export function WorkforcePerformancePage() {
                 </Field>
               </div>
             </div>
-            <Button className="mt-3" disabled={busy || !courseCode.trim() || !courseTitle.trim()} onClick={() => void createCourse()}>{t("wf.perf.t.saveCourse")}</Button>
+            <Button className="mt-3" disabled={busy} onClick={() => void createCourse()}>{t("wf.perf.t.saveCourse")}</Button>
           </Card>
 
           <Card>
@@ -504,7 +528,7 @@ export function WorkforcePerformancePage() {
               <Field label={t("wf.perf.f.employee")} required><Select value={enrollEmployeeId} onChange={(event) => setEnrollEmployeeId(event.target.value)}><option value="">{t("wf.perf.t.selectEmployee")}</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}</Select></Field>
               <Field label={t("wf.perf.f.course")} required><Select value={enrollCourseId} onChange={(event) => setEnrollCourseId(event.target.value)}><option value="">{t("wf.perf.t.selectCourse")}</option>{courses.filter((item) => item.isActive).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></Field>
             </div>
-            <Button className="mt-3" disabled={busy || !enrollEmployeeId || !enrollCourseId} onClick={() => void enrollEmployee()}>{t("wf.perf.t.enrollInTraining")}</Button>
+            <Button className="mt-3" disabled={busy} onClick={() => void enrollEmployee()}>{t("wf.perf.t.enrollInTraining")}</Button>
           </Card>
         </div>
       ) : null}
@@ -518,7 +542,7 @@ export function WorkforcePerformancePage() {
             <Field label={t("wf.perf.f.requiredTenureMonths")}><Input type="number" min="0" value={tenureMonths} onChange={(event) => setTenureMonths(event.target.value)} /></Field>
             <div className="sm:col-span-3"><Field label={t("wf.perf.f.careerMobilityGuidelines")}><Textarea rows={2} value={careerGuidelines} onChange={(event) => setCareerGuidelines(event.target.value)} /></Field></div>
           </div>
-          <Button className="mt-3" disabled={busy || !fromPositionId || !toPositionId} onClick={() => void createCareerPath()}>{t("wf.perf.t.saveCareerPath")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createCareerPath()}>{t("wf.perf.t.saveCareerPath")}</Button>
         </Card>
       ) : null}
 

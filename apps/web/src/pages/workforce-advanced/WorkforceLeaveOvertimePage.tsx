@@ -146,6 +146,23 @@ export function WorkforceLeaveOvertimePage() {
     [leaveTypes],
   );
 
+  // Reports missing/invalid fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>, invalid: Array<[boolean, string]> = []): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return false;
+    }
+    const bad = invalid.filter(([isBad]) => isBad).map(([, label]) => label);
+    if (bad.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: bad.join(", ") }));
+      return false;
+    }
+    return true;
+  }
+
   async function run(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError(null);
@@ -162,6 +179,7 @@ export function WorkforceLeaveOvertimePage() {
   }
 
   async function createLeaveType() {
+    if (!requireFields([[typeCode.trim(), t("wf.leave.f.code")], [typeName.trim(), t("wf.leave.f.name")]])) return;
     await run(
       () => api.createWorkforceLeaveType(token, {
         code: typeCode.trim(),
@@ -177,6 +195,15 @@ export function WorkforceLeaveOvertimePage() {
   }
 
   async function allocateBalance() {
+    if (!requireFields(
+      [
+        [allocationEmployee, t("wf.leave.f.employee")],
+        [allocationType, t("wf.leave.f.leaveType")],
+        [balanceYear.trim(), t("wf.leave.f.year")],
+        [allocatedDays.trim(), t("wf.leave.f.allocatedDays")],
+      ],
+      [[!(Number(allocatedDays) >= 0), t("wf.leave.f.allocatedDays")]],
+    )) return;
     await run(
       () => api.setWorkforceLeaveAllocation(token, {
         employeeId: allocationEmployee,
@@ -189,6 +216,19 @@ export function WorkforceLeaveOvertimePage() {
   }
 
   async function submitLeave() {
+    if (!requireFields(
+      [
+        [leaveEmployee, t("wf.leave.f.employee")],
+        [leaveTypeId, t("wf.leave.f.leaveType")],
+        [leaveStart, t("wf.leave.f.startDate")],
+        [leaveEnd, t("wf.leave.f.endDate")],
+        [leaveDays.trim(), t("wf.leave.f.totalDays")],
+      ],
+      [
+        [!(Number(leaveDays) > 0), t("wf.leave.f.totalDays")],
+        [leaveEnd < leaveStart, t("wf.leave.f.endDate")],
+      ],
+    )) return;
     await run(
       () => api.createWorkforceLeaveRequest(token, {
         employeeId: leaveEmployee,
@@ -206,6 +246,16 @@ export function WorkforceLeaveOvertimePage() {
   }
 
   async function submitOvertime() {
+    if (!requireFields(
+      [
+        [overtimeEmployee, t("wf.leave.f.employee")],
+        [overtimeDate, t("wf.leave.f.overtimeDate")],
+        [overtimeStart, t("wf.leave.f.startTime")],
+        [overtimeEnd, t("wf.leave.f.endTime")],
+        [estimatedHours.trim(), t("wf.leave.f.estimatedHours")],
+      ],
+      [[!(Number(estimatedHours) > 0), t("wf.leave.f.estimatedHours")]],
+    )) return;
     await run(
       () => api.createWorkforceOvertimeRequest(token, {
         employeeId: overtimeEmployee,
@@ -222,12 +272,21 @@ export function WorkforceLeaveOvertimePage() {
 
   async function act(kind: "leave" | "overtime", id: string) {
     const actionCode = actionCodeById[id]?.trim();
-    if (!actionCode) return;
+    if (!requireFields([[actionCode, t("wf.leave.p.actionCode")]])) return;
     await run(
       () => kind === "leave"
         ? api.actOnWorkforceLeaveRequest(token, id, actionCode, commentById[id] || null)
         : api.actOnWorkforceOvertimeRequest(token, id, actionCode, commentById[id] || null),
       `${label(actionCode)} action completed.`,
+    );
+  }
+
+  async function recordActualOvertime(id: string) {
+    const raw = (actualHoursById[id] ?? "").trim().replace(",", ".");
+    if (!requireFields([[raw, t("wf.leave.p.actualHours")]], [[!(Number(raw) >= 0), t("wf.leave.p.actualHours")]])) return;
+    await run(
+      () => api.recordWorkforceActualOvertime(token, id, Number(raw)),
+      "Actual overtime recorded.",
     );
   }
 
@@ -266,7 +325,7 @@ export function WorkforceLeaveOvertimePage() {
             value={commentById[leaveRequest.id] ?? ""}
             onChange={(event) => setCommentById((current) => ({ ...current, [leaveRequest.id]: event.target.value }))}
           />
-          <Button variant="secondary" disabled={busy || !actionCodeById[leaveRequest.id]?.trim()} onClick={() => void act("leave", leaveRequest.id)}>
+          <Button variant="secondary" disabled={busy} onClick={() => void act("leave", leaveRequest.id)}>
             Run action
           </Button>
         </div>
@@ -310,13 +369,10 @@ export function WorkforceLeaveOvertimePage() {
               />
               <Button
                 variant="secondary"
-                disabled={busy || !actualHoursById[overtimeRequest.id]}
-                onClick={() => void run(
-                  () => api.recordWorkforceActualOvertime(token, overtimeRequest.id, Number(actualHoursById[overtimeRequest.id])),
-                  "Actual overtime recorded.",
-                )}
+                disabled={busy}
+                onClick={() => void recordActualOvertime(overtimeRequest.id)}
               >
-                Save
+                {t("common.save")}
               </Button>
             </div>
           ) : null}
@@ -334,7 +390,7 @@ export function WorkforceLeaveOvertimePage() {
                 value={commentById[overtimeRequest.id] ?? ""}
                 onChange={(event) => setCommentById((current) => ({ ...current, [overtimeRequest.id]: event.target.value }))}
               />
-              <Button variant="secondary" disabled={busy || !actionCodeById[overtimeRequest.id]?.trim()} onClick={() => void act("overtime", overtimeRequest.id)}>
+              <Button variant="secondary" disabled={busy} onClick={() => void act("overtime", overtimeRequest.id)}>
                 Run action
               </Button>
             </>
@@ -427,7 +483,7 @@ export function WorkforceLeaveOvertimePage() {
             <Field label={t("wf.leave.f.attachmentDocumentId")} hint={t("wf.leave.n.requiredWhenTheSelectedPolicyRequiresEvi")}><Input value={leaveAttachmentId} onChange={(event) => setLeaveAttachmentId(event.target.value)} /></Field>
             <div className="sm:col-span-2"><Field label={t("wf.leave.f.reason")}><Textarea rows={2} value={leaveReason} onChange={(event) => setLeaveReason(event.target.value)} /></Field></div>
           </div>
-          <Button className="mt-3" disabled={busy || !leaveEmployee || !leaveTypeId || !leaveStart || !leaveEnd || Number(leaveDays) <= 0} onClick={() => void submitLeave()}>{t("wf.leave.t.submitLeaveRequest")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void submitLeave()}>{t("wf.leave.t.submitLeaveRequest")}</Button>
         </Card>
       ) : null}
 
@@ -442,7 +498,7 @@ export function WorkforceLeaveOvertimePage() {
             <Field label={t("wf.leave.f.estimatedHours")} required><Input type="number" min="0.25" step="0.25" value={estimatedHours} onChange={(event) => setEstimatedHours(event.target.value)} /></Field>
             <div className="sm:col-span-2 lg:col-span-3"><Field label={t("wf.leave.f.reason")}><Textarea rows={2} value={overtimeReason} onChange={(event) => setOvertimeReason(event.target.value)} /></Field></div>
           </div>
-          <Button className="mt-3" disabled={busy || !overtimeEmployee || !overtimeDate || !overtimeStart || !overtimeEnd || Number(estimatedHours) <= 0} onClick={() => void submitOvertime()}>{t("wf.leave.t.submitOvertimeRequest")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void submitOvertime()}>{t("wf.leave.t.submitOvertimeRequest")}</Button>
         </Card>
       ) : null}
 
@@ -455,7 +511,7 @@ export function WorkforceLeaveOvertimePage() {
             <Field label={t("wf.leave.f.year")} required><Input type="number" min="2000" max="2100" value={balanceYear} onChange={(event) => setBalanceYear(event.target.value)} /></Field>
             <Field label={t("wf.leave.f.allocatedDays")} required><Input type="number" min="0" step="0.5" value={allocatedDays} onChange={(event) => setAllocatedDays(event.target.value)} /></Field>
           </div>
-          <Button className="mt-3" disabled={busy || !allocationEmployee || !allocationType || Number(allocatedDays) < 0} onClick={() => void allocateBalance()}>{t("wf.leave.t.saveAllocation")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void allocateBalance()}>{t("wf.leave.t.saveAllocation")}</Button>
         </Card>
       ) : null}
 
@@ -463,7 +519,7 @@ export function WorkforceLeaveOvertimePage() {
         <Card>
           <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("wf.leave.t.createLeaveType")}</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label={t("wf.leave.f.code")} required><Input value={typeCode} onChange={(event) => setTypeCode(event.target.value)} placeholder="ANNUAL" /></Field>
+            <Field label={t("wf.leave.f.code")} required><Input value={typeCode} onChange={(event) => setTypeCode(event.target.value)} placeholder={t("common.form.example", { value: "ANNUAL" })} /></Field>
             <Field label={t("wf.leave.f.name")} required><Input value={typeName} onChange={(event) => setTypeName(event.target.value)} placeholder={t("wf.leave.p.annualLeave")} /></Field>
             <Field label={t("wf.leave.f.annualAllowance")}><Input type="number" min="0" step="0.5" value={allowance} onChange={(event) => setAllowance(event.target.value)} /></Field>
           </div>
@@ -471,7 +527,7 @@ export function WorkforceLeaveOvertimePage() {
             <label className="flex items-center gap-2"><input type="checkbox" checked={typePaid} onChange={(event) => setTypePaid(event.target.checked)} />{t("wf.leave.f.paidLeave")}</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={requiresAttachment} onChange={(event) => setRequiresAttachment(event.target.checked)} />{t("wf.leave.f.requiresAttachment")}</label>
           </div>
-          <Button className="mt-3" disabled={busy || !typeCode.trim() || !typeName.trim()} onClick={() => void createLeaveType()}>{t("wf.leave.t.createLeaveType")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createLeaveType()}>{t("wf.leave.t.createLeaveType")}</Button>
         </Card>
       ) : null}
 

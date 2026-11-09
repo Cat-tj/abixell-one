@@ -189,7 +189,33 @@ export function FinanceBankReconPage() {
     void loadMovement();
   }, [loadMovement]);
 
+  function formProblem(kind: "missing" | "invalid", fields: Array<string | null>): boolean {
+    const list = fields.filter((x): x is string => x !== null);
+    if (list.length === 0) return false;
+    setNotice(null);
+    setError(t(kind === "missing" ? "common.form.missing" : "common.form.invalid", { fields: list.join(", ") }));
+    return true;
+  }
+
+  // A comma is accepted as the decimal separator ("12,5" -> "12.5").
+  const decimal = (v: string) => v.trim().replace(",", ".");
+
   async function registerAccount() {
+    if (
+      formProblem("missing", [
+        !bankName.trim() ? t("finRecon.bankName") : null,
+        !houseBankCode.trim() ? t("finRecon.houseBankCode") : null,
+        !accountName.trim() ? t("finRecon.accountName") : null,
+        !masked.trim() ? t("finRecon.accountNumber") : null,
+        !ledgerAccountId ? t("finRecon.ledgerAccount") : null,
+        !accountCurrency.trim() ? t("fin.common.currency") : null,
+        !effectiveFrom ? t("finRecon.effectiveFrom") : null,
+        !externalAccountId.trim() ? t("finRecon.externalId") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formProblem("invalid", [accountCurrency.trim().length !== 3 ? t("fin.common.currency") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -201,7 +227,7 @@ export function FinanceBankReconPage() {
         bankAccountId: externalAccountId.trim(),
         accountNumberMasked: masked.trim(),
         name: accountName.trim(),
-        currency: accountCurrency,
+        currency: accountCurrency.trim(),
         ledgerAccountId,
         reconciliationPolicy: policy,
         effectiveFrom,
@@ -253,6 +279,14 @@ export function FinanceBankReconPage() {
   }
 
   async function openReconciliation() {
+    if (
+      formProblem("missing", [
+        !bankAccountId ? t("finPeriods.bankAccount") : null,
+        !periodId ? t("finAcct.period") : null,
+      ])
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -292,6 +326,15 @@ export function FinanceBankReconPage() {
 
   async function createMatch() {
     if (!reconId) return;
+    if (
+      formProblem("missing", [
+        !glEntryId ? t("finRecon.ledgerEntry") : null,
+        matchAmount.trim() === "" ? t("fin.common.amount") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formProblem("invalid", [!isValidAmountInput(decimal(matchAmount)) ? t("fin.common.amount") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -301,7 +344,7 @@ export function FinanceBankReconPage() {
         statementLineId: lineId,
         glEntryId,
         // Verbatim text at 2 decimals — ledger precision.
-        amount: matchAmount.trim(),
+        amount: decimal(matchAmount),
         matchKind: "manual",
         matchReason: null,
         idempotencyKey: newIdempotencyKey(),
@@ -326,7 +369,7 @@ export function FinanceBankReconPage() {
     setNotice(null);
     try {
       const closed = await api.accountingCloseReconciliation(token, reconId, {
-        statementBalance: closeBalance.trim() || null,
+        statementBalance: decimal(closeBalance) || null,
       });
       setNotice(
         t("finRecon.closed", {
@@ -375,7 +418,12 @@ export function FinanceBankReconPage() {
     {
       header: t("fin.common.actions"),
       cell: (row) => (
-        <Button variant="secondary" disabled={busy || !openRecon} onClick={() => void suggest(row)}>
+        <Button
+          variant="secondary"
+          disabled={busy || !openRecon}
+          title={!openRecon ? t("finRecon.needsOpenRecon") : undefined}
+          onClick={() => void suggest(row)}
+        >
           {t("finRecon.findMatch")}
         </Button>
       ),
@@ -425,15 +473,15 @@ export function FinanceBankReconPage() {
         {movement ? (
           <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
             <div>
-              <span className="text-xs uppercase tracking-wide text-ink-faint">{t("finRecon.bookMovement")}</span>
+              <span className="text-xs text-ink-faint">{t("finRecon.bookMovement")}</span>
               <div className="tabular-nums text-ink">{formatMoney(movement.bookMovement)}</div>
             </div>
             <div>
-              <span className="text-xs uppercase tracking-wide text-ink-faint">{t("finRecon.statementMovement")}</span>
+              <span className="text-xs text-ink-faint">{t("finRecon.statementMovement")}</span>
               <div className="tabular-nums text-ink">{formatMoney(movement.statementMovement)}</div>
             </div>
             <div>
-              <span className="text-xs uppercase tracking-wide text-ink-faint">{t("finRecon.difference")}</span>
+              <span className="text-xs text-ink-faint">{t("finRecon.difference")}</span>
               <div className="tabular-nums text-ink">{formatMoney(movement.difference)}</div>
             </div>
           </div>
@@ -455,7 +503,7 @@ export function FinanceBankReconPage() {
               />
             </Field>
             <Field label={t("finRecon.houseBankCode")} required hint={t("finRecon.houseBankCodeHint")}>
-              <Input value={houseBankCode} onChange={(e) => setHouseBankCode(e.target.value)} placeholder="BCA-01" />
+              <Input value={houseBankCode} onChange={(e) => setHouseBankCode(e.target.value)} placeholder={t("common.form.example", { value: "BCA-01" })} />
             </Field>
             <Field label={t("finRecon.accountName")} required>
               <Input
@@ -465,7 +513,7 @@ export function FinanceBankReconPage() {
               />
             </Field>
             <Field label={t("finRecon.accountNumber")} required hint={t("finRecon.accountNumberHint")}>
-              <Input value={masked} onChange={(e) => setMasked(e.target.value)} placeholder="****1234" />
+              <Input value={masked} onChange={(e) => setMasked(e.target.value)} placeholder={t("common.form.example", { value: "****1234" })} />
             </Field>
             <Field label={t("finRecon.ledgerAccount")} required>
               <Select value={ledgerAccountId} onChange={(e) => setLedgerAccountId(e.target.value)}>
@@ -499,16 +547,7 @@ export function FinanceBankReconPage() {
           </div>
           <div className="mt-3">
             <Button
-              disabled={
-                busy ||
-                !bankName.trim() ||
-                !houseBankCode.trim() ||
-                !accountName.trim() ||
-                !masked.trim() ||
-                !ledgerAccountId ||
-                !effectiveFrom ||
-                !externalAccountId.trim()
-              }
+              disabled={busy}
               onClick={() => void registerAccount()}
             >
               {t("finRecon.register")}
@@ -532,10 +571,17 @@ export function FinanceBankReconPage() {
               }}
             />
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="secondary" disabled={busy || !bankAccountId} onClick={() => fileInput.current?.click()}>
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => {
+                  if (formProblem("missing", [!bankAccountId ? t("finPeriods.bankAccount") : null])) return;
+                  fileInput.current?.click();
+                }}
+              >
                 {t("finRecon.chooseCsv")}
               </Button>
-              <Button disabled={busy || !bankAccountId || !periodId} onClick={() => void openReconciliation()}>
+              <Button disabled={busy} onClick={() => void openReconciliation()}>
                 {t("finRecon.openReconciliation")}
               </Button>
               {importName ? (
@@ -565,19 +611,20 @@ export function FinanceBankReconPage() {
                     label={t("fin.common.amount")}
                     required
                     hint={
-                      matchAmount && !isValidAmountInput(matchAmount) ? t("finAssets.amountHint") : undefined
+                      matchAmount && !isValidAmountInput(decimal(matchAmount)) ? t("finAssets.amountHint") : undefined
                     }
                   >
                     <Input
                       inputMode="decimal"
                       value={matchAmount}
                       onChange={(e) => setMatchAmount(e.target.value)}
-                      aria-invalid={matchAmount !== "" && !isValidAmountInput(matchAmount)}
+                      aria-invalid={matchAmount !== "" && !isValidAmountInput(decimal(matchAmount))}
                     />
                   </Field>
                   <div className="flex items-end">
                     <Button
-                      disabled={busy || !glEntryId || !isValidAmountInput(matchAmount) || !openRecon}
+                      disabled={busy || !openRecon}
+                      title={!openRecon ? t("finRecon.needsOpenRecon") : undefined}
                       onClick={() => void createMatch()}
                     >
                       {t("finRecon.recordMatch")}
@@ -620,11 +667,15 @@ export function FinanceBankReconPage() {
                     inputMode="decimal"
                     value={closeBalance}
                     onChange={(e) => setCloseBalance(e.target.value)}
-                    placeholder="0.00"
+                    placeholder={t("common.form.example", { value: "0.00" })}
                   />
                 </Field>
                 <div className="flex items-end">
-                  <Button disabled={busy || activeRecon.status !== "open"} onClick={() => void close()}>
+                  <Button
+                    disabled={busy || activeRecon.status !== "open"}
+                    title={activeRecon.status !== "open" ? t("finRecon.alreadyClosed") : undefined}
+                    onClick={() => void close()}
+                  >
                     {t("finRecon.closeReconciliation")}
                   </Button>
                 </div>

@@ -101,8 +101,9 @@ export function ManagementDashboardPage() {
     try {
       const res = await api.complaintDashboard(token, {
         // Send the 'to' as end-of-day so the selected day is inclusive.
-        from: new Date(filters.from + "T00:00:00").toISOString(),
-        to: new Date(filters.to + "T23:59:59").toISOString(),
+        // A cleared date filter means "no bound", not an invalid date.
+        from: filters.from ? new Date(filters.from + "T00:00:00").toISOString() : undefined,
+        to: filters.to ? new Date(filters.to + "T23:59:59.999").toISOString() : undefined,
         customerId: filters.customerId || undefined,
         severity: filters.severity || undefined,
       });

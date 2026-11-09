@@ -95,7 +95,7 @@ Tenant Scope (broadest)
 | Field | Value |
 |-------|-------|
 | **Email** | `admin@demo.local` |
-| **Password** | `Admin12345!` |
+| **Password** | `admin123!` |
 | **Full Name** | Demo Administrator |
 | **Scope** | Tenant-wide (all operations) |
 | **Roles** | ADMIN (unrestricted) |
@@ -107,7 +107,7 @@ curl -X POST http://localhost:4010/auth/login \
   -d '{
     "tenantCode": "demo-gs",
     "email": "admin@demo.local",
-    "password": "Admin12345!"
+    "password": "admin123!"
   }'
 ```
 

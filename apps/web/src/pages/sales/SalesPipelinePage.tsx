@@ -1,10 +1,11 @@
 /** Wave A1 — Customer & Commercial Advanced (CUS-ADV-001 / CUS-ADV-002). */
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import {
   api,
   ApiError,
   type Customer,
+  type CommercialService,
   type OpportunityRecord,
   type OpportunityPipelineSummary,
   type OpportunityDetailRecord,
@@ -12,6 +13,7 @@ import {
   type QuotationDetailRecord,
   type PriceBookRecord,
   type PriceBookEntryRecord,
+  type SalesOutcome,
 } from "../../lib/api";
 import { useT } from "../../i18n/LocaleProvider";
 import {
@@ -29,43 +31,86 @@ import {
   type Column,
 } from "../../shell/components/ui";
 
-function stageTone(stageCode: string): "neutral" | "info" | "success" | "warning" | "danger" {
-  switch (stageCode) {
-    case "closed":
-      return "neutral";
-    case "negotiation":
-      return "warning";
-    case "proposal":
-      return "info";
-    case "qualification":
-    case "lead":
-    default:
-      return "neutral";
-  }
-}
+type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 
-function outcomeTone(outcome: string | null): "neutral" | "info" | "success" | "warning" | "danger" {
+type RefOption = { code: string; label: string };
+
+const OUTCOMES: SalesOutcome[] = ["open", "won", "lost", "cancelled"];
+
+function outcomeTone(outcome: string | null): Tone {
   if (outcome === "won") return "success";
-  if (outcome === "lost" || outcome === "abandoned") return "danger";
+  if (outcome === "lost") return "danger";
+  if (outcome === "cancelled") return "warning";
   return "neutral";
 }
 
-function quotationStatusTone(status: string): "neutral" | "info" | "success" | "warning" | "danger" {
+function quotationStatusTone(status: string): Tone {
   switch (status) {
     case "accepted":
       return "success";
     case "issued":
       return "info";
-    case "submitted":
+    case "in_approval":
       return "warning";
     case "declined":
     case "withdrawn":
+    case "expired":
       return "danger";
     case "draft":
     default:
       return "neutral";
   }
 }
+
+function money(currency: string, value: number | string | null | undefined): string {
+  return `${currency} ${Number(value ?? 0).toLocaleString()}`;
+}
+
+function blank(v: string): boolean {
+  return v.trim() === "";
+}
+
+// Forgiving decimal parser: "12,5" -> 12.5, "1.500.000,50" -> 1500000.5, "Rp 25000" -> 25000.
+function parseDecimal(raw: string): number | null {
+  let s = raw.trim().replace(/[^\d.,-]/g, "");
+  if (s === "") return null;
+  if (s.includes(",")) s = s.includes(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Forgiving integer parser: "1.500", "1,500", "75%" keep digits only.
+function parseDigits(raw: string): number | null {
+  const digits = raw.replace(/\D/g, "");
+  return digits === "" ? null : Number(digits);
+}
+
+const EMPTY_OPP_FORM = {
+  customerId: "",
+  title: "",
+  stageCode: "",
+  sourceCode: "",
+  currencyCode: "IDR",
+  estimatedValue: "",
+  probabilityPercent: "",
+  expectedCloseDate: "",
+};
+
+const EMPTY_QUOTE_FORM = {
+  opportunityId: "",
+  title: "",
+  serviceId: "",
+  unitCode: "",
+  quantity: "1",
+  unitPrice: "",
+  discountAmount: "",
+  validUntil: "",
+  notes: "",
+};
+
+const EMPTY_BOOK_FORM = { code: "", name: "", currencyCode: "IDR", effectiveFrom: "", effectiveTo: "" };
+
+const EMPTY_ENTRY_FORM = { serviceId: "", unitCode: "", unitPrice: "", minQuantity: "1" };
 
 export function SalesPipelinePage() {
   const { session } = useAuth();
@@ -79,6 +124,17 @@ export function SalesPipelinePage() {
   const [pipelineSummaries, setPipelineSummaries] = useState<OpportunityPipelineSummary[]>([]);
   const [selectedOppId, setSelectedOppId] = useState<string | null>(null);
   const [opportunityDetail, setOpportunityDetail] = useState<OpportunityDetailRecord | null>(null);
+
+  const [services, setServices] = useState<CommercialService[]>([]);
+  const [stages, setStages] = useState<RefOption[]>([]);
+  const [sources, setSources] = useState<RefOption[]>([]);
+  const [units, setUnits] = useState<RefOption[]>([]);
+  const [oppForm, setOppForm] = useState(EMPTY_OPP_FORM);
+  const [quoteForm, setQuoteForm] = useState(EMPTY_QUOTE_FORM);
+  const [bookForm, setBookForm] = useState(EMPTY_BOOK_FORM);
+  const [entryForm, setEntryForm] = useState(EMPTY_ENTRY_FORM);
+  const [stageForm, setStageForm] = useState({ stageCode: "", outcome: "", outcomeReason: "", note: "" });
+  const messageRef = useRef<HTMLDivElement | null>(null);
 
   const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
   const [selectedQuotationId, setSelectedQuotationId] = useState<string | null>(null);
@@ -101,7 +157,7 @@ export function SalesPipelinePage() {
     setLoading(true);
     setMessage(null);
     try {
-      const [meRes, custRes, oppsRes, pipeRes, quotesRes, pbooksRes] = await Promise.all([
+      const [meRes, custRes, oppsRes, pipeRes, quotesRes, pbooksRes, svcRes, refRes] = await Promise.all([
         api.me(token),
         api.customers(token).catch(() => [] as Customer[]),
         api.opportunities(token, {
@@ -111,6 +167,12 @@ export function SalesPipelinePage() {
         api.opportunityPipeline(token).catch(() => [] as OpportunityPipelineSummary[]),
         api.quotations(token).catch(() => [] as QuotationRecord[]),
         api.priceBooks(token).catch(() => [] as PriceBookRecord[]),
+        api.commercialServices(token).catch(() => [] as CommercialService[]),
+        api.salesReferenceOptions(token).catch(() => ({
+          stages: [] as RefOption[],
+          sources: [] as RefOption[],
+          units: [] as RefOption[],
+        })),
       ]);
 
       setPermissions(meRes.permissions ?? []);
@@ -119,6 +181,10 @@ export function SalesPipelinePage() {
       setPipelineSummaries(pipeRes);
       setQuotations(quotesRes);
       setPriceBooks(pbooksRes);
+      setServices(svcRes.filter((sv) => sv.isActive));
+      setStages(refRes.stages);
+      setSources(refRes.sources);
+      setUnits(refRes.units);
       if (pbooksRes.length > 0 && !selectedPriceBookId) {
         setSelectedPriceBookId(pbooksRes[0].id);
       }
@@ -141,7 +207,10 @@ export function SalesPipelinePage() {
       return;
     }
     api.opportunity(token, selectedOppId)
-      .then((detail) => setOpportunityDetail(detail))
+      .then((detail) => {
+        setOpportunityDetail(detail);
+        setStageForm({ stageCode: detail.opportunity.stageCode, outcome: "", outcomeReason: "", note: "" });
+      })
       .catch((err) => {
         setMessage({
           type: "error",
@@ -182,24 +251,52 @@ export function SalesPipelinePage() {
       });
   }, [token, selectedPriceBookId, t]);
 
+  // Shows what is missing/invalid (never silently refuses) and brings the banner into view.
+  function rejectForm(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const miss = missing.filter((x): x is string => x !== null);
+    const bad = invalid.filter((x): x is string => x !== null);
+    if (miss.length === 0 && bad.length === 0) return false;
+    setMessage({
+      type: "error",
+      text: miss.length > 0
+        ? t("common.form.missing", { fields: miss.join(", ") })
+        : t("common.form.invalid", { fields: bad.join(", ") }),
+    });
+    messageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return true;
+  }
+
   // Handle Create Opportunity
   async function handleCreateOpportunity(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const estimatedValue = blank(oppForm.estimatedValue) ? null : parseDecimal(oppForm.estimatedValue);
+    const probability = blank(oppForm.probabilityPercent) ? null : parseDigits(oppForm.probabilityPercent);
+    if (rejectForm(
+      [
+        blank(oppForm.title) ? t("sc.sales.f.title") : null,
+        blank(oppForm.customerId) ? t("sc.sales.f.customer") : null,
+        blank(oppForm.stageCode) ? t("sc.sales.f.stage") : null,
+        blank(oppForm.currencyCode) ? t("sc.sales.f.currency") : null,
+      ],
+      [
+        oppForm.currencyCode.trim().length < 3 ? t("sc.sales.f.currency") : null,
+        !blank(oppForm.estimatedValue) && (estimatedValue === null || estimatedValue < 0) ? t("sc.sales.f.estimatedValue") : null,
+        !blank(oppForm.probabilityPercent) && (probability === null || probability > 100) ? t("sc.sales.f.confidence") : null,
+      ],
+    )) return;
     try {
       await api.createOpportunity(token, {
-        code: String(form.get("code")).trim(),
-        title: String(form.get("title")).trim(),
-        customerId: String(form.get("customerId")),
-        leadSource: String(form.get("leadSource") || "inbound"),
-        stageCode: String(form.get("stageCode") || "lead"),
-        estimatedValue: form.get("estimatedValue") ? Number(form.get("estimatedValue")) : null,
-        currency: String(form.get("currency") || "IDR"),
-        confidencePercent: form.get("confidencePercent") ? Number(form.get("confidencePercent")) : null,
-        targetCloseDate: form.get("targetCloseDate") ? String(form.get("targetCloseDate")) : null,
+        customerId: oppForm.customerId,
+        title: oppForm.title.trim(),
+        stageCode: oppForm.stageCode,
+        sourceCode: oppForm.sourceCode || null,
+        currencyCode: oppForm.currencyCode.trim(),
+        estimatedValue,
+        probabilityPercent: probability,
+        expectedCloseDate: oppForm.expectedCloseDate || null,
       });
       setMessage({ type: "success", text: "Opportunity created successfully." });
-      (e.target as HTMLFormElement).reset();
+      setOppForm(EMPTY_OPP_FORM);
       loadData();
     } catch (err) {
       setMessage({
@@ -212,19 +309,14 @@ export function SalesPipelinePage() {
   // Handle Opportunity Stage Transition
   async function handleStageChange(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (rejectForm([blank(stageForm.stageCode) ? t("sc.sales.f.targetStage") : null])) return;
     if (!selectedOppId) return;
-    const form = new FormData(e.currentTarget);
     try {
-      const stageCode = String(form.get("stageCode"));
-      const outcome = form.get("outcome") ? String(form.get("outcome")) : undefined;
-      const outcomeReason = form.get("outcomeReason") ? String(form.get("outcomeReason")) : undefined;
-      const note = form.get("note") ? String(form.get("note")) : undefined;
-
       await api.changeOpportunityStage(token, selectedOppId, {
-        stageCode,
-        outcome: outcome || undefined,
-        outcomeReason,
-        note,
+        stageCode: stageForm.stageCode,
+        outcome: stageForm.outcome ? (stageForm.outcome as SalesOutcome) : undefined,
+        outcomeReason: stageForm.outcomeReason.trim() || undefined,
+        note: stageForm.note.trim() || undefined,
       });
       setMessage({ type: "success", text: "Opportunity stage updated." });
       const updated = await api.opportunity(token, selectedOppId);
@@ -241,28 +333,41 @@ export function SalesPipelinePage() {
   // Handle Create Quotation
   async function handleCreateQuotation(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const quantity = parseDecimal(quoteForm.quantity);
+    const unitPrice = blank(quoteForm.unitPrice) ? null : parseDecimal(quoteForm.unitPrice);
+    const discountAmount = blank(quoteForm.discountAmount) ? null : parseDecimal(quoteForm.discountAmount);
+    if (rejectForm(
+      [
+        blank(quoteForm.opportunityId) ? t("sc.sales.f.opportunity") : null,
+        blank(quoteForm.title) ? t("sc.sales.f.title") : null,
+        blank(quoteForm.serviceId) ? t("sc.sales.f.service") : null,
+        blank(quoteForm.unitCode) ? t("sc.sales.f.unit") : null,
+        blank(quoteForm.quantity) ? t("sc.sales.f.quantity") : null,
+      ],
+      [
+        quantity === null || quantity <= 0 ? t("sc.sales.f.quantity") : null,
+        !blank(quoteForm.unitPrice) && (unitPrice === null || unitPrice < 0) ? t("sc.sales.f.unitPriceOptional") : null,
+        !blank(quoteForm.discountAmount) && (discountAmount === null || discountAmount < 0) ? t("sc.sales.f.discountAmount") : null,
+      ],
+    ) || quantity === null) return;
     try {
-      const lineItems = [
-        {
-          description: String(form.get("itemDescription") || "Primary Service"),
-          unitPrice: Number(form.get("unitPrice") || 0),
-          quantity: Number(form.get("quantity") || 1),
-          discountPercent: Number(form.get("discountPercent") || 0),
-        },
-      ];
-
       await api.createQuotation(token, {
-        code: String(form.get("code")).trim(),
-        opportunityId: form.get("opportunityId") ? String(form.get("opportunityId")) : null,
-        customerId: String(form.get("customerId")),
-        priceBookId: form.get("priceBookId") ? String(form.get("priceBookId")) : null,
-        currency: String(form.get("currency") || "IDR"),
-        validUntil: form.get("validUntil") ? String(form.get("validUntil")) : null,
-        items: lineItems,
+        opportunityId: quoteForm.opportunityId,
+        title: quoteForm.title.trim(),
+        notes: quoteForm.notes.trim() || null,
+        validUntil: quoteForm.validUntil || null,
+        lines: [
+          {
+            serviceId: quoteForm.serviceId,
+            unitCode: quoteForm.unitCode,
+            quantity,
+            unitPrice,
+            discountAmount,
+          },
+        ],
       });
       setMessage({ type: "success", text: "Quotation drafted successfully." });
-      (e.target as HTMLFormElement).reset();
+      setQuoteForm(EMPTY_QUOTE_FORM);
       loadData();
     } catch (err) {
       setMessage({
@@ -329,16 +434,28 @@ export function SalesPipelinePage() {
   // Handle Create Price Book
   async function handleCreatePriceBook(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    if (rejectForm(
+      [
+        blank(bookForm.code) ? t("sc.sales.f.code") : null,
+        blank(bookForm.name) ? t("sc.sales.f.name") : null,
+        blank(bookForm.currencyCode) ? t("sc.sales.f.currency") : null,
+        blank(bookForm.effectiveFrom) ? t("sc.sales.f.effectiveFrom") : null,
+      ],
+      [
+        bookForm.currencyCode.trim().length < 3 ? t("sc.sales.f.currency") : null,
+        !blank(bookForm.effectiveTo) && bookForm.effectiveTo < bookForm.effectiveFrom ? t("sc.sales.f.effectiveTo") : null,
+      ],
+    )) return;
     try {
       const created = await api.createPriceBook(token, {
-        code: String(form.get("code")).trim(),
-        name: String(form.get("name")).trim(),
-        currency: String(form.get("currency") || "IDR"),
-        isStandard: form.get("isStandard") === "true",
+        code: bookForm.code.trim(),
+        name: bookForm.name.trim(),
+        currencyCode: bookForm.currencyCode.trim(),
+        effectiveFrom: bookForm.effectiveFrom,
+        effectiveTo: bookForm.effectiveTo || null,
       });
       setMessage({ type: "success", text: "Price Book created." });
-      (e.target as HTMLFormElement).reset();
+      setBookForm(EMPTY_BOOK_FORM);
       setSelectedPriceBookId(created.id);
       loadData();
     } catch (err) {
@@ -352,18 +469,29 @@ export function SalesPipelinePage() {
   // Handle Add Entry to Price Book
   async function handleAddPriceBookEntry(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const entryPrice = parseDecimal(entryForm.unitPrice);
+    const entryMinQty = blank(entryForm.minQuantity) ? null : parseDecimal(entryForm.minQuantity);
+    if (rejectForm(
+      [
+        blank(entryForm.serviceId) ? t("sc.sales.f.service") : null,
+        blank(entryForm.unitCode) ? t("sc.sales.f.unit") : null,
+        blank(entryForm.unitPrice) ? t("sc.sales.f.unitPrice") : null,
+      ],
+      [
+        entryPrice === null || entryPrice < 0 ? t("sc.sales.f.unitPrice") : null,
+        !blank(entryForm.minQuantity) && (entryMinQty === null || entryMinQty < 0) ? t("sc.sales.p.minQty") : null,
+      ],
+    ) || entryPrice === null) return;
     if (!selectedPriceBookId) return;
-    const form = new FormData(e.currentTarget);
     try {
       await api.addPriceBookEntry(token, selectedPriceBookId, {
-        itemSku: String(form.get("itemSku")).trim(),
-        unitPrice: Number(form.get("unitPrice")),
-        minQuantity: Number(form.get("minQuantity") || 1),
-        maxQuantity: form.get("maxQuantity") ? Number(form.get("maxQuantity")) : null,
-        unitOfMeasure: String(form.get("unitOfMeasure") || "unit"),
+        serviceId: entryForm.serviceId,
+        unitCode: entryForm.unitCode,
+        unitPrice: entryPrice,
+        minQuantity: entryMinQty ?? undefined,
       });
       setMessage({ type: "success", text: "Price book entry added." });
-      (e.target as HTMLFormElement).reset();
+      setEntryForm(EMPTY_ENTRY_FORM);
       const entries = await api.priceBookEntries(token, selectedPriceBookId);
       setPriceBookEntries(entries);
     } catch (err) {
@@ -374,6 +502,29 @@ export function SalesPipelinePage() {
     }
   }
 
+  const customerName = (id: string | null | undefined) =>
+    customers.find((c) => c.id === id)?.name ?? "—";
+  const serviceName = (id: string | null | undefined) =>
+    services.find((sv) => sv.id === id)?.name ?? "—";
+
+  // Aggregated pipeline rows are keyed by stage + outcome.
+  const pipelineCards = useMemo(
+    () =>
+      pipelineSummaries.map((p) => ({ ...p, key: `${p.stageCode}:${p.outcome}` })),
+    [pipelineSummaries],
+  );
+
+  const outcomeLabel = (o: string) =>
+    o === "open" ? t("sc.sales.t.inProgress")
+    : o === "won" ? t("sc.sales.t.won")
+    : o === "lost" ? t("sc.sales.t.lost")
+    : t("sc.sales.t.cancelled");
+
+  const stageLabel = useCallback(
+    (code: string) => stages.find((st) => st.code === code)?.label ?? code,
+    [stages],
+  );
+
   const oppColumns: Column<OpportunityRecord>[] = useMemo(
     () => [
       {
@@ -381,7 +532,7 @@ export function SalesPipelinePage() {
         cell: (r: OpportunityRecord) => (
           <div>
             <div className="font-medium text-slate-900">{r.title}</div>
-            <div className="text-xs text-slate-500">{r.code}</div>
+            <div className="text-xs text-slate-500">{r.opportunityNumber}</div>
           </div>
         ),
       },
@@ -389,25 +540,23 @@ export function SalesPipelinePage() {
         header: t("sc.sales.h.stage"),
         cell: (r: OpportunityRecord) => (
           <div className="flex items-center gap-1.5">
-            <StatusPill tone={stageTone(r.stageCode)}>{r.stageCode}</StatusPill>
-            {r.outcome && <StatusPill tone={outcomeTone(r.outcome)}>{r.outcome}</StatusPill>}
+            <StatusPill tone="neutral">{stageLabel(r.stageCode)}</StatusPill>
+            {r.outcome !== "open" && <StatusPill tone={outcomeTone(r.outcome)}>{r.outcome}</StatusPill>}
           </div>
         ),
       },
       {
         header: t("sc.sales.h.estValue"),
         cell: (r: OpportunityRecord) =>
-          r.estimatedValue !== null
-            ? `${r.currency} ${Number(r.estimatedValue).toLocaleString()}`
-            : "—",
+          r.estimatedValue !== null ? money(r.currencyCode, r.estimatedValue) : "—",
       },
       {
         header: t("sc.sales.h.confidence"),
-        cell: (r: OpportunityRecord) => (r.confidencePercent !== null ? `${r.confidencePercent}%` : "—"),
+        cell: (r: OpportunityRecord) => (r.probabilityPercent !== null ? `${r.probabilityPercent}%` : "—"),
       },
       {
         header: t("sc.sales.h.targetClose"),
-        cell: (r: OpportunityRecord) => r.targetCloseDate || "—",
+        cell: (r: OpportunityRecord) => r.expectedCloseDate || "—",
       },
       {
         header: "",
@@ -422,7 +571,7 @@ export function SalesPipelinePage() {
         ),
       },
     ],
-    [t],
+    [t, stageLabel],
   );
 
   const quoteColumns: Column<QuotationRecord>[] = useMemo(
@@ -431,20 +580,20 @@ export function SalesPipelinePage() {
         header: t("sc.sales.h.quotationCode"),
         cell: (r: QuotationRecord) => (
           <div>
-            <div className="font-medium text-slate-900">{r.code}</div>
-            <div className="text-xs text-slate-500">v{r.revisionNumber}</div>
+            <div className="font-medium text-slate-900">{r.quotationNumber}</div>
+            <div className="text-xs text-slate-500">{r.title} · v{r.revision}</div>
           </div>
         ),
       },
       {
         header: t("sc.sales.h.status"),
         cell: (r: QuotationRecord) => (
-          <StatusPill tone={quotationStatusTone(r.status)}>{r.status}</StatusPill>
+          <StatusPill tone={quotationStatusTone(r.status)}>{r.status.replace("_", " ")}</StatusPill>
         ),
       },
       {
         header: t("sc.sales.h.totalAmount"),
-        cell: (r: QuotationRecord) => `${r.currency} ${Number(r.totalAmount).toLocaleString()}`,
+        cell: (r: QuotationRecord) => money(r.currencyCode, r.totalAmount),
       },
       {
         header: t("sc.sales.h.validUntil"),
@@ -470,7 +619,7 @@ export function SalesPipelinePage() {
                 Submit
               </Button>
             )}
-            {canApproveSales && r.status === "submitted" && (
+            {canApproveSales && r.status === "in_approval" && (
               <Button
                 variant="primary"
                 className="text-xs py-1"
@@ -510,9 +659,11 @@ export function SalesPipelinePage() {
       />
 
       {message && (
-        <Alert tone={message.type === "error" ? "error" : message.type === "success" ? "success" : "info"}>
-          {message.text}
-        </Alert>
+        <div ref={messageRef}>
+          <Alert tone={message.type === "error" ? "error" : message.type === "success" ? "success" : "info"}>
+            {message.text}
+          </Alert>
+        </div>
       )}
 
       {/* Tabs */}
@@ -562,16 +713,19 @@ export function SalesPipelinePage() {
             <div className="space-y-6">
               {/* Pipeline summary cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {pipelineSummaries.map((pipe) => (
-                  <Card key={pipe.stageCode} className="p-3">
-                    <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      {pipe.stageCode}
+                {pipelineCards.map((pipe) => (
+                  <Card key={pipe.key} className="p-3">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                      {stageLabel(pipe.stageCode)}
+                      {pipe.outcome !== "open" && (
+                        <StatusPill tone={outcomeTone(pipe.outcome)}>{pipe.outcome}</StatusPill>
+                      )}
                     </div>
                     <div className="text-xl font-bold text-slate-900 mt-1">
-                      {pipe.count} <span className="text-xs font-normal text-slate-500">{t("sc.sales.t.deals")}</span>
+                      {pipe.opportunityCount} <span className="text-xs font-normal text-slate-500">{t("sc.sales.t.deals")}</span>
                     </div>
                     <div className="text-xs text-slate-600 mt-0.5">
-                      IDR {Number(pipe.totalEstimatedValue || 0).toLocaleString()}
+                      {Number(pipe.estimatedValueTotal || 0).toLocaleString()}
                     </div>
                   </Card>
                 ))}
@@ -589,11 +743,9 @@ export function SalesPipelinePage() {
                         onChange={(e) => setFilterStage(e.target.value)}
                       >
                         <option value="">{t("sc.sales.t.allStages")}</option>
-                        <option value="lead">{t("sc.sales.t.lead")}</option>
-                        <option value="qualification">{t("sc.sales.t.qualification")}</option>
-                        <option value="proposal">{t("sc.sales.t.proposal")}</option>
-                        <option value="negotiation">{t("sc.sales.t.negotiation")}</option>
-                        <option value="closed">{t("sc.sales.t.closed")}</option>
+                        {stages.map((st) => (
+                          <option key={st.code} value={st.code}>{st.label}</option>
+                        ))}
                       </Select>
                       <Select
                         className="text-xs py-1"
@@ -601,9 +753,9 @@ export function SalesPipelinePage() {
                         onChange={(e) => setFilterOutcome(e.target.value)}
                       >
                         <option value="">{t("sc.sales.t.allOutcomes")}</option>
-                        <option value="won">{t("sc.sales.t.won")}</option>
-                        <option value="lost">{t("sc.sales.t.lost")}</option>
-                        <option value="abandoned">{t("sc.sales.t.abandoned")}</option>
+                        {OUTCOMES.map((o) => (
+                          <option key={o} value={o}>{outcomeLabel(o)}</option>
+                        ))}
                       </Select>
                     </div>
                   </div>
@@ -626,7 +778,7 @@ export function SalesPipelinePage() {
                             {opportunityDetail.opportunity.title}
                           </h4>
                           <p className="text-xs text-slate-500">
-                            {opportunityDetail.opportunity.code}
+                            {opportunityDetail.opportunity.opportunityNumber}
                           </p>
                         </div>
                         <Button
@@ -642,30 +794,29 @@ export function SalesPipelinePage() {
                         <div className="flex justify-between py-1 border-b border-slate-100">
                           <span className="text-slate-500">{t("sc.sales.t.customer")}</span>
                           <span className="font-medium text-slate-800">
-                            {opportunityDetail.customer?.name ?? "—"}
+                            {customerName(opportunityDetail.opportunity.customerId)}
                           </span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-slate-100">
                           <span className="text-slate-500">{t("sc.sales.t.stage")}</span>
-                          <StatusPill tone={stageTone(opportunityDetail.opportunity.stageCode)}>
-                            {opportunityDetail.opportunity.stageCode}
+                          <StatusPill tone="neutral">
+                            {stageLabel(opportunityDetail.opportunity.stageCode)}
                           </StatusPill>
                         </div>
-                        {opportunityDetail.opportunity.outcome && (
-                          <div className="flex justify-between py-1 border-b border-slate-100">
-                            <span className="text-slate-500">{t("sc.sales.t.outcome")}</span>
-                            <StatusPill tone={outcomeTone(opportunityDetail.opportunity.outcome)}>
-                              {opportunityDetail.opportunity.outcome}
-                            </StatusPill>
-                          </div>
-                        )}
+                        <div className="flex justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-500">{t("sc.sales.t.outcome")}</span>
+                          <StatusPill tone={outcomeTone(opportunityDetail.opportunity.outcome)}>
+                            {opportunityDetail.opportunity.outcome}
+                          </StatusPill>
+                        </div>
                         <div className="flex justify-between py-1 border-b border-slate-100">
                           <span className="text-slate-500">{t("sc.sales.t.estValue")}</span>
                           <span className="font-medium text-slate-800">
-                            {opportunityDetail.opportunity.estimatedValue
-                              ? `${opportunityDetail.opportunity.currency} ${Number(
+                            {opportunityDetail.opportunity.estimatedValue !== null
+                              ? money(
+                                  opportunityDetail.opportunity.currencyCode,
                                   opportunityDetail.opportunity.estimatedValue,
-                                ).toLocaleString()}`
+                                )
                               : "—"}
                           </span>
                         </div>
@@ -674,45 +825,63 @@ export function SalesPipelinePage() {
                       {/* Stage Transition Form */}
                       {canManageSales && (
                         <form onSubmit={handleStageChange} className="space-y-3 pt-2 border-t border-slate-200">
-                          <div className="text-xs font-semibold uppercase text-slate-600">
+                          <div className="text-xs font-bold text-slate-600">
                             Advance Stage
                           </div>
-                          <Field label={t("sc.sales.f.targetStage")}>
-                            <Select name="stageCode" defaultValue={opportunityDetail.opportunity.stageCode}>
-                              <option value="lead">{t("sc.sales.t.lead")}</option>
-                              <option value="qualification">{t("sc.sales.t.qualification")}</option>
-                              <option value="proposal">{t("sc.sales.t.proposal")}</option>
-                              <option value="negotiation">{t("sc.sales.t.negotiation")}</option>
-                              <option value="closed">{t("sc.sales.t.closed")}</option>
+                          <Field label={t("sc.sales.f.targetStage")} required>
+                            <Select
+                              value={stageForm.stageCode}
+                              onChange={(e) => setStageForm({ ...stageForm, stageCode: e.target.value })}
+                            >
+                              <option value="">{t("sc.sales.t.selectStage")}</option>
+                              {stages.map((st) => (
+                                <option key={st.code} value={st.code}>{st.label}</option>
+                              ))}
                             </Select>
                           </Field>
                           <Field label={t("sc.sales.f.outcomeIfClosing")}>
-                            <Select name="outcome">
+                            <Select
+                              value={stageForm.outcome}
+                              onChange={(e) => setStageForm({ ...stageForm, outcome: e.target.value })}
+                            >
                               <option value="">{t("sc.sales.t.inProgress")}</option>
-                              <option value="won">{t("sc.sales.t.won")}</option>
-                              <option value="lost">{t("sc.sales.t.lost")}</option>
-                              <option value="abandoned">{t("sc.sales.t.abandoned")}</option>
+                              {OUTCOMES.filter((o) => o !== "open").map((o) => (
+                                <option key={o} value={o}>{outcomeLabel(o)}</option>
+                              ))}
                             </Select>
                           </Field>
+                          <Field label={t("sc.sales.f.outcomeReason")}>
+                            <Input
+                              value={stageForm.outcomeReason}
+                              onChange={(e) => setStageForm({ ...stageForm, outcomeReason: e.target.value })}
+                            />
+                          </Field>
                           <Field label={t("sc.sales.f.noteOutcomeReason")}>
-                            <Input name="note" placeholder={t("sc.sales.p.stageTransitionRationale")} />
+                            <Input
+                              value={stageForm.note}
+                              placeholder={t("sc.sales.p.stageTransitionRationale")}
+                              onChange={(e) => setStageForm({ ...stageForm, note: e.target.value })}
+                            />
                           </Field>
                           <Button type="submit" variant="primary" className="w-full">
-              {t("sc.sales.t.updateStage")}
-              </Button>
+                            {t("sc.sales.t.updateStage")}
+                          </Button>
                         </form>
                       )}
 
                       {/* Stage History */}
                       <div className="pt-3 border-t border-slate-200 space-y-2">
-                        <div className="text-xs font-semibold uppercase text-slate-600">
+                        <div className="text-xs font-bold text-slate-600">
                           Stage Timeline
                         </div>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {opportunityDetail.stageHistory.map((hist) => (
+                          {opportunityDetail.history.map((hist) => (
                             <div key={hist.id} className="text-xs p-2 bg-slate-50 rounded border border-slate-100">
                               <div className="flex justify-between font-medium text-slate-700">
-                                <span>{hist.fromStageCode || "start"} → {hist.toStageCode}</span>
+                                <span>
+                                  {hist.fromStageCode ? stageLabel(hist.fromStageCode) : "start"} → {stageLabel(hist.toStageCode)}
+                                  {hist.toOutcome !== "open" ? ` (${hist.toOutcome})` : ""}
+                                </span>
                                 <span>{new Date(hist.changedAt).toLocaleDateString()}</span>
                               </div>
                               {hist.note && <div className="text-slate-500 mt-1">{hist.note}</div>}
@@ -720,19 +889,35 @@ export function SalesPipelinePage() {
                           ))}
                         </div>
                       </div>
+
+                      {opportunityDetail.quotations.length > 0 && (
+                        <div className="pt-3 border-t border-slate-200 space-y-2">
+                          <div className="text-xs font-bold text-slate-600">{t("sc.sales.t.relatedQuotations")}</div>
+                          {opportunityDetail.quotations.map((q) => (
+                            <div key={q.id} className="flex justify-between text-xs p-2 bg-slate-50 rounded border border-slate-100">
+                              <span>{q.quotationNumber} · v{q.revision}</span>
+                              <span>{money(q.currencyCode, q.totalAmount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </Card>
                   ) : canManageSales ? (
                     <Card className="space-y-4">
                       <h4 className="font-semibold text-slate-900">{t("sc.sales.t.newOpportunity")}</h4>
                       <form onSubmit={handleCreateOpportunity} className="space-y-3">
-                        <Field label={t("sc.sales.f.code")} required>
-                          <Input name="code" placeholder="OPP-2026-001" required />
-                        </Field>
                         <Field label={t("sc.sales.f.title")} required>
-                          <Input name="title" placeholder={t("sc.sales.p.annualFiberRenewal")} required />
+                          <Input
+                            value={oppForm.title}
+                            placeholder={t("sc.sales.p.annualFiberRenewal")}
+                            onChange={(e) => setOppForm({ ...oppForm, title: e.target.value })}
+                          />
                         </Field>
                         <Field label={t("sc.sales.f.customer")} required>
-                          <Select name="customerId" required>
+                          <Select
+                            value={oppForm.customerId}
+                            onChange={(e) => setOppForm({ ...oppForm, customerId: e.target.value })}
+                          >
                             <option value="">{t("sc.sales.t.selectCustomer")}</option>
                             {customers.map((c) => (
                               <option key={c.id} value={c.id}>
@@ -741,18 +926,63 @@ export function SalesPipelinePage() {
                             ))}
                           </Select>
                         </Field>
+                        <Field label={t("sc.sales.f.stage")} required>
+                          <Select
+                            value={oppForm.stageCode}
+                            onChange={(e) => setOppForm({ ...oppForm, stageCode: e.target.value })}
+                          >
+                            <option value="">{t("sc.sales.t.selectStage")}</option>
+                            {stages.map((st) => (
+                              <option key={st.code} value={st.code}>{st.label}</option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label={t("sc.sales.f.source")}>
+                          <Select
+                            value={oppForm.sourceCode}
+                            onChange={(e) => setOppForm({ ...oppForm, sourceCode: e.target.value })}
+                          >
+                            <option value="">{t("sc.sales.t.noSource")}</option>
+                            {sources.map((so) => (
+                              <option key={so.code} value={so.code}>{so.label}</option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label={t("sc.sales.f.currency")} required>
+                          <Input
+                            value={oppForm.currencyCode}
+                            maxLength={8}
+                            onChange={(e) => setOppForm({ ...oppForm, currencyCode: e.target.value.toUpperCase() })}
+                          />
+                        </Field>
                         <Field label={t("sc.sales.f.estimatedValue")}>
-                          <Input type="number" name="estimatedValue" placeholder="150000000" />
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder={t("common.form.example", { value: "150000000" })}
+                            value={oppForm.estimatedValue}
+                            onChange={(e) => setOppForm({ ...oppForm, estimatedValue: e.target.value })}
+                          />
                         </Field>
                         <Field label={t("sc.sales.f.confidence")}>
-                          <Input type="number" name="confidencePercent" placeholder="75" min="0" max="100" />
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={t("common.form.example", { value: "75" })}
+                            value={oppForm.probabilityPercent}
+                            onChange={(e) => setOppForm({ ...oppForm, probabilityPercent: e.target.value })}
+                          />
                         </Field>
                         <Field label={t("sc.sales.f.targetCloseDate")}>
-                          <Input type="date" name="targetCloseDate" />
+                          <Input
+                            type="date"
+                            value={oppForm.expectedCloseDate}
+                            onChange={(e) => setOppForm({ ...oppForm, expectedCloseDate: e.target.value })}
+                          />
                         </Field>
                         <Button type="submit" variant="primary" className="w-full">
-              {t("sc.sales.t.createOpportunity")}
-              </Button>
+                          {t("sc.sales.t.createOpportunity")}
+                        </Button>
                       </form>
                     </Card>
                   ) : null}
@@ -780,10 +1010,10 @@ export function SalesPipelinePage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h4 className="font-semibold text-slate-900 text-lg">
-                          {quotationDetail.quotation.code}
+                          {quotationDetail.quotation.quotationNumber}
                         </h4>
                         <p className="text-xs text-slate-500">
-                          Revision #{quotationDetail.quotation.revisionNumber}
+                          {quotationDetail.quotation.title} · Revision #{quotationDetail.quotation.revision}
                         </p>
                       </div>
                       <Button
@@ -799,45 +1029,50 @@ export function SalesPipelinePage() {
                       <div className="flex justify-between py-1 border-b border-slate-100">
                         <span className="text-slate-500">{t("sc.sales.t.customer")}</span>
                         <span className="font-medium text-slate-800">
-                          {quotationDetail.customer?.name ?? "—"}
+                          {customerName(quotationDetail.quotation.customerId)}
                         </span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100">
                         <span className="text-slate-500">{t("sc.sales.t.status")}</span>
                         <StatusPill tone={quotationStatusTone(quotationDetail.quotation.status)}>
-                          {quotationDetail.quotation.status}
+                          {quotationDetail.quotation.status.replace("_", " ")}
                         </StatusPill>
                       </div>
+                      {quotationDetail.status?.stepName && (
+                        <div className="flex justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-500">{t("sc.sales.t.approvalStep")}</span>
+                          <span className="font-medium text-slate-800">{quotationDetail.status.stepName}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between py-1 border-b border-slate-100">
                         <span className="text-slate-500">{t("sc.sales.t.total")}</span>
                         <span className="font-bold text-slate-900">
-                          {quotationDetail.quotation.currency}{" "}
-                          {Number(quotationDetail.quotation.totalAmount).toLocaleString()}
+                          {money(quotationDetail.quotation.currencyCode, quotationDetail.quotation.totalAmount)}
                         </span>
                       </div>
                     </div>
 
                     {/* Line Items */}
                     <div className="pt-2 border-t border-slate-200">
-                      <div className="text-xs font-semibold uppercase text-slate-600 mb-2">
+                      <div className="text-xs font-bold text-slate-600 mb-2">
                         Line Items
                       </div>
                       <div className="space-y-2">
-                        {quotationDetail.items.map((item) => (
+                        {quotationDetail.lines.map((line) => (
                           <div
-                            key={item.id}
+                            key={line.id}
                             className="p-2.5 bg-slate-50 rounded border border-slate-200 text-xs flex justify-between items-center"
                           >
                             <div>
                               <div className="font-medium text-slate-800">
-                                {item.description}
+                                {line.serviceNameSnapshot}
                               </div>
                               <div className="text-slate-500">
-                                {item.quantity} x {Number(item.unitPrice).toLocaleString()} (disc: {item.discountPercent}%)
+                                {line.quantity} {line.unitCode} x {Number(line.unitPrice).toLocaleString()} (disc: {Number(line.discountAmount).toLocaleString()})
                               </div>
                             </div>
                             <div className="font-semibold text-slate-900">
-                              {Number(item.lineTotal).toLocaleString()}
+                              {Number(line.lineTotal).toLocaleString()}
                             </div>
                           </div>
                         ))}
@@ -848,59 +1083,92 @@ export function SalesPipelinePage() {
                   <Card className="space-y-4">
                     <h4 className="font-semibold text-slate-900">{t("sc.sales.t.draftQuotation")}</h4>
                     <form onSubmit={handleCreateQuotation} className="space-y-3">
-                      <Field label={t("sc.sales.f.quotationCode")} required>
-                        <Input name="code" placeholder="QUO-2026-001" required />
-                      </Field>
-                      <Field label={t("sc.sales.f.customer")} required>
-                        <Select name="customerId" required>
-                          <option value="">{t("sc.sales.t.selectCustomer")}</option>
-                          {customers.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                      <Field label={t("sc.sales.f.opportunityOptional")}>
-                        <Select name="opportunityId">
-                          <option value="">{t("sc.sales.t.none")}</option>
+                      <Field label={t("sc.sales.f.opportunity")} required>
+                        <Select
+                          value={quoteForm.opportunityId}
+                          onChange={(e) => setQuoteForm({ ...quoteForm, opportunityId: e.target.value })}
+                        >
+                          <option value="">{t("sc.sales.t.selectOpportunity")}</option>
                           {opportunities.map((o) => (
                             <option key={o.id} value={o.id}>
-                              {o.code} - {o.title}
+                              {o.opportunityNumber} - {o.title}
                             </option>
                           ))}
                         </Select>
                       </Field>
-                      <Field label={t("sc.sales.f.priceBookOptional")}>
-                        <Select name="priceBookId">
-                          <option value="">{t("sc.sales.t.standardCatalog")}</option>
-                          {priceBooks.map((pb) => (
-                            <option key={pb.id} value={pb.id}>
-                              {pb.name} ({pb.currency})
+                      <Field label={t("sc.sales.f.title")} required>
+                        <Input
+                          value={quoteForm.title}
+                          onChange={(e) => setQuoteForm({ ...quoteForm, title: e.target.value })}
+                        />
+                      </Field>
+                      <Field label={t("sc.sales.f.service")} required>
+                        <Select
+                          value={quoteForm.serviceId}
+                          onChange={(e) => setQuoteForm({ ...quoteForm, serviceId: e.target.value })}
+                        >
+                          <option value="">{t("sc.sales.t.selectService")}</option>
+                          {services.map((sv) => (
+                            <option key={sv.id} value={sv.id}>
+                              {sv.name} ({sv.code})
                             </option>
                           ))}
                         </Select>
-                      </Field>
-                      <Field label={t("sc.sales.f.itemDescription")} required>
-                        <Input name="itemDescription" placeholder={t("sc.sales.p.dedicated1gbpsBandwidth")} required />
                       </Field>
                       <div className="grid grid-cols-2 gap-2">
-                        <Field label={t("sc.sales.f.unitPrice")} required>
-                          <Input type="number" name="unitPrice" placeholder="25000000" required />
+                        <Field label={t("sc.sales.f.unit")} required>
+                          <Select
+                            value={quoteForm.unitCode}
+                            onChange={(e) => setQuoteForm({ ...quoteForm, unitCode: e.target.value })}
+                          >
+                            <option value="">{t("sc.sales.t.selectUnit")}</option>
+                            {units.map((u) => (
+                              <option key={u.code} value={u.code}>{u.label}</option>
+                            ))}
+                          </Select>
                         </Field>
                         <Field label={t("sc.sales.f.quantity")} required>
-                          <Input type="number" name="quantity" defaultValue="1" min="1" required />
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={quoteForm.quantity}
+                            onChange={(e) => setQuoteForm({ ...quoteForm, quantity: e.target.value })}
+                          />
                         </Field>
                       </div>
-                      <Field label={t("sc.sales.f.discount")}>
-                        <Input type="number" name="discountPercent" defaultValue="0" min="0" max="100" />
+                      <Field label={t("sc.sales.f.unitPriceOptional")}>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder={t("common.form.example", { value: "25000000" })}
+                          value={quoteForm.unitPrice}
+                          onChange={(e) => setQuoteForm({ ...quoteForm, unitPrice: e.target.value })}
+                        />
+                      </Field>
+                      <Field label={t("sc.sales.f.discountAmount")}>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={quoteForm.discountAmount}
+                          onChange={(e) => setQuoteForm({ ...quoteForm, discountAmount: e.target.value })}
+                        />
                       </Field>
                       <Field label={t("sc.sales.f.validUntil")}>
-                        <Input type="date" name="validUntil" />
+                        <Input
+                          type="date"
+                          value={quoteForm.validUntil}
+                          onChange={(e) => setQuoteForm({ ...quoteForm, validUntil: e.target.value })}
+                        />
+                      </Field>
+                      <Field label={t("sc.sales.f.notes")}>
+                        <Input
+                          value={quoteForm.notes}
+                          onChange={(e) => setQuoteForm({ ...quoteForm, notes: e.target.value })}
+                        />
                       </Field>
                       <Button type="submit" variant="primary" className="w-full">
-              {t("sc.sales.t.createQuotation")}
-              </Button>
+                        {t("sc.sales.t.createQuotation")}
+                      </Button>
                     </form>
                   </Card>
                 ) : null}
@@ -927,12 +1195,12 @@ export function SalesPipelinePage() {
                     >
                       <div className="flex justify-between items-start">
                         <div className="font-semibold text-slate-900">{pb.name}</div>
-                        {pb.isStandard && (
-                          <StatusPill tone="info">{t("sc.sales.t.standard")}</StatusPill>
+                        {pb.customerId === null && (
+                          <StatusPill tone="info">{t("sc.sales.t.tenantWide")}</StatusPill>
                         )}
                       </div>
                       <div className="text-xs text-slate-500 mt-1">
-                        Code: {pb.code} | Currency: {pb.currency}
+                        Code: {pb.code} | Currency: {pb.currencyCode} | {pb.effectiveFrom}{pb.effectiveTo ? ` → ${pb.effectiveTo}` : ""}
                       </div>
                     </div>
                   ))}
@@ -942,9 +1210,15 @@ export function SalesPipelinePage() {
                   <Card className="space-y-3 mt-4">
                     <div className="font-semibold text-slate-900 text-sm">{t("sc.sales.t.addPriceBook")}</div>
                     <form onSubmit={handleCreatePriceBook} className="space-y-2">
-                      <Input name="code" placeholder={t("sc.sales.p.codeEGPbEnt2026")} required />
-                      <Input name="name" placeholder={t("sc.sales.p.nameEGEnterpriseTier")} required />
-                      <Input name="currency" placeholder={t("sc.sales.p.currencyEGIdr")} defaultValue="IDR" required />
+                      <Input value={bookForm.code} placeholder={t("sc.sales.p.codeEGPbEnt2026")} onChange={(e) => setBookForm({ ...bookForm, code: e.target.value })} />
+                      <Input value={bookForm.name} placeholder={t("sc.sales.p.nameEGEnterpriseTier")} onChange={(e) => setBookForm({ ...bookForm, name: e.target.value })} />
+                      <Input value={bookForm.currencyCode} maxLength={8} placeholder={t("sc.sales.p.currencyEGIdr")} onChange={(e) => setBookForm({ ...bookForm, currencyCode: e.target.value.toUpperCase() })} />
+                      <Field label={t("sc.sales.f.effectiveFrom")} required>
+                        <Input type="date" value={bookForm.effectiveFrom} onChange={(e) => setBookForm({ ...bookForm, effectiveFrom: e.target.value })} />
+                      </Field>
+                      <Field label={t("sc.sales.f.effectiveTo")}>
+                        <Input type="date" value={bookForm.effectiveTo} onChange={(e) => setBookForm({ ...bookForm, effectiveTo: e.target.value })} />
+                      </Field>
                       <Button type="submit" variant="secondary" className="w-full text-xs">
               {t("sc.sales.t.createPriceBook")}
               </Button>
@@ -965,30 +1239,28 @@ export function SalesPipelinePage() {
                       <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
                           <tr>
-                            <th className="p-3">SKU</th>
+                            <th className="p-3">{t("sc.sales.h.service")}</th>
+                            <th className="p-3">{t("sc.sales.h.unit")}</th>
                             <th className="p-3">{t("sc.sales.h.unitPrice")}</th>
                             <th className="p-3">{t("sc.sales.h.minQty")}</th>
-                            <th className="p-3">{t("sc.sales.h.maxQty")}</th>
-                            <th className="p-3">UOM</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {priceBookEntries.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="p-4 text-center text-slate-400 text-xs">
+                              <td colSpan={4} className="p-4 text-center text-slate-400 text-xs">
                                 No entries configured for this price book.
                               </td>
                             </tr>
                           ) : (
                             priceBookEntries.map((entry) => (
                               <tr key={entry.id}>
-                                <td className="p-3 font-medium text-slate-900">{entry.itemSku}</td>
+                                <td className="p-3 font-medium text-slate-900">{serviceName(entry.serviceId)}</td>
+                                <td className="p-3 text-slate-500">{entry.unitCode}</td>
                                 <td className="p-3">
                                   {Number(entry.unitPrice).toLocaleString()}
                                 </td>
                                 <td className="p-3">{entry.minQuantity}</td>
-                                <td className="p-3">{entry.maxQuantity ?? "∞"}</td>
-                                <td className="p-3 text-slate-500">{entry.unitOfMeasure}</td>
                               </tr>
                             ))
                           )}
@@ -1001,16 +1273,25 @@ export function SalesPipelinePage() {
                         <div className="font-semibold text-slate-900 text-sm">
                           Add Volume Entry to Selected Book
                         </div>
-                        <form onSubmit={handleAddPriceBookEntry} className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                          <Input name="itemSku" placeholder={t("sc.sales.p.skuEGBw100m")} required />
-                          <Input type="number" name="unitPrice" placeholder={t("sc.sales.p.unitPrice")} required />
-                          <Input type="number" name="minQuantity" placeholder={t("sc.sales.p.minQty")} defaultValue="1" required />
-                          <Input type="number" name="maxQuantity" placeholder={t("sc.sales.p.maxQtyOpt")} />
-                          <Input name="unitOfMeasure" placeholder={t("sc.sales.p.uomEGMbps")} defaultValue="unit" required />
-                          <div className="col-span-2 md:col-span-5">
+                        <form onSubmit={handleAddPriceBookEntry} className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <Select value={entryForm.serviceId} onChange={(e) => setEntryForm({ ...entryForm, serviceId: e.target.value })}>
+                            <option value="">{t("sc.sales.t.selectService")}</option>
+                            {services.map((sv) => (
+                              <option key={sv.id} value={sv.id}>{sv.name} ({sv.code})</option>
+                            ))}
+                          </Select>
+                          <Select value={entryForm.unitCode} onChange={(e) => setEntryForm({ ...entryForm, unitCode: e.target.value })}>
+                            <option value="">{t("sc.sales.t.selectUnit")}</option>
+                            {units.map((u) => (
+                              <option key={u.code} value={u.code}>{u.label}</option>
+                            ))}
+                          </Select>
+                          <Input type="text" inputMode="decimal" value={entryForm.unitPrice} placeholder={t("sc.sales.p.unitPrice")} onChange={(e) => setEntryForm({ ...entryForm, unitPrice: e.target.value })} />
+                          <Input type="text" inputMode="decimal" value={entryForm.minQuantity} placeholder={t("sc.sales.p.minQty")} onChange={(e) => setEntryForm({ ...entryForm, minQuantity: e.target.value })} />
+                          <div className="col-span-2 md:col-span-4">
                             <Button type="submit" variant="primary" className="w-full text-xs">
-              {t("sc.sales.t.addVolumePricingTier")}
-              </Button>
+                              {t("sc.sales.t.addVolumePricingTier")}
+                            </Button>
                           </div>
                         </form>
                       </Card>

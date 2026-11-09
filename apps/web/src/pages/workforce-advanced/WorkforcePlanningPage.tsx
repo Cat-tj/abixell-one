@@ -119,6 +119,23 @@ export function WorkforcePlanningPage() {
     [positions],
   );
 
+  // Reports missing/invalid fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>, invalid: Array<[boolean, string]> = []): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return false;
+    }
+    const bad = invalid.filter(([isBad]) => isBad).map(([, label]) => label);
+    if (bad.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: bad.join(", ") }));
+      return false;
+    }
+    return true;
+  }
+
   async function runAction(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError(null);
@@ -135,6 +152,10 @@ export function WorkforcePlanningPage() {
   }
 
   async function createPlan() {
+    if (!requireFields(
+      [[planTitle.trim(), t("wf.plan.f.scenarioTitle")], [planYear.trim(), t("wf.plan.f.planYear")]],
+      [[!(Number(planYear) >= 2000 && Number(planYear) <= 2100), t("wf.plan.f.planYear")]],
+    )) return;
     await runAction(
       () => api.createWorkforceManpowerPlan(token, {
         title: planTitle.trim(),
@@ -271,7 +292,7 @@ export function WorkforcePlanningPage() {
             <Field label={t("wf.plan.f.planYear")} required><Input type="number" min="2000" max="2100" value={planYear} onChange={(event) => setPlanYear(event.target.value)} /></Field>
             <Field label={t("wf.plan.f.organizationUnitId")}><Input value={planUnitId} onChange={(event) => setPlanUnitId(event.target.value)} placeholder={t("wf.plan.p.optionalUnitScope")} /></Field>
           </div>
-          <Button className="mt-3" disabled={busy || !planTitle.trim()} onClick={() => void createPlan()}>{t("wf.plan.t.createScenario")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createPlan()}>{t("wf.plan.t.createScenario")}</Button>
         </Card>
       ) : null}
 

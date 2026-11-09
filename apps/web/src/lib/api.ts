@@ -1235,6 +1235,9 @@ export const api = {
       description?: string | null;
       priority?: string | null;
       dueAt?: string | null;
+      /** Back-charge work orders must NOT carry a contractId (API returns 400). */
+      woType?: WorkOrderType;
+      contractId?: string | null;
     },
   ) => request<WorkOrder>("/work-orders", { method: "POST", token, body }),
   assignWorkOrder: (token: string, id: string, assigneeUserId: string) =>
@@ -1262,6 +1265,44 @@ export const api = {
     request<WorkOrder>(`/work-orders/${id}/complete`, { method: "POST", token, body: { notes } }),
   verifyWorkOrder: (token: string, id: string, notes: string | null) =>
     request<WorkOrder>(`/work-orders/${id}/verify`, { method: "POST", token, body: { notes } }),
+  issueWorkOrderAcceptanceToken: (token: string, id: string, expiresInDays?: number) =>
+    request<{ token: string; expiresAt: string }>(`/work-orders/${id}/acceptance-token`, {
+      method: "POST",
+      token,
+      body: expiresInDays ? { expiresInDays } : {},
+    }),
+  customerAcceptWorkOrder: (token: string, id: string, comment: string | null) =>
+    request<WorkOrder>(`/work-orders/${id}/customer-accept`, { method: "POST", token, body: { comment } }),
+  customerRejectWorkOrder: (token: string, id: string, reason: string) =>
+    request<WorkOrder>(`/work-orders/${id}/customer-reject`, { method: "POST", token, body: { reason } }),
+  workOrderCostItems: (token: string, id: string) =>
+    request<WorkOrderCostItem[]>(`/work-orders/${id}/cost-items`, { token }),
+  addWorkOrderCostItem: (token: string, id: string, body: AddWorkOrderCostItemInput) =>
+    request<WorkOrderCostItem>(`/work-orders/${id}/cost-items`, { method: "POST", token, body }),
+  finalizeWorkOrderCosts: (token: string, id: string, legalEntityId: string) =>
+    request<FinalizeWorkOrderCostsResult>(`/work-orders/${id}/finalize-costs`, {
+      method: "POST",
+      token,
+      body: { legalEntityId },
+    }),
+  createWorkOrderInvoice: (token: string, id: string, body: CreateWorkOrderInvoiceInput) =>
+    request<{ invoice: WorkOrderCustomerInvoice; outboxEventsEmitted: number }>(`/work-orders/${id}/create-invoice`, {
+      method: "POST",
+      token,
+      body,
+    }),
+  /** Resolves to null when no invoice exists yet (the API answers 404 then). */
+  workOrderInvoice: (token: string, id: string) =>
+    request<WorkOrderCustomerInvoice>(`/work-orders/${id}/invoice`, { token }).catch((err: unknown) => {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }),
+  customerInvoices: (token: string, filter: CustomerInvoiceFilter = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(filter)) if (v) qs.set(k, v);
+    const suffix = qs.toString();
+    return request<{ items: CustomerInvoiceListItem[] }>(`/customer-invoices${suffix ? `?${suffix}` : ""}`, { token });
+  },
   recordServingLog: (token: string, workOrderId: string, body: CreateServingLogInput) =>
     request<{ servingLog: WorkOrderServingLog }>(`/work-orders/${workOrderId}/serving`, {
       method: "POST",
@@ -1497,9 +1538,16 @@ export const api = {
     request<{ item: ScmItem; balances: StockBalanceRecord[] }>(`/items/${code}`, { token }),
   createScmItem: (
     token: string,
-    body: { code: string; name: string; description?: string | null; category?: string | null; unitOfMeasure: string },
+    body: {
+      code: string;
+      name: string;
+      description?: string | null;
+      category?: string | null;
+      unitOfMeasure: string;
+      grade?: ScmGrade | null;
+    },
   ) => request<ScmItem>("/items", { method: "POST", token, body }),
-  updateScmItem: (token: string, code: string, body: { name?: string; isActive?: boolean }) =>
+  updateScmItem: (token: string, code: string, body: { name?: string; isActive?: boolean; grade?: ScmGrade | null }) =>
     request<ScmItem>(`/items/${code}`, { method: "PATCH", token, body }),
 
   suppliers: (token: string, query: { search?: string } = {}) => {
@@ -1798,7 +1846,7 @@ export const api = {
 
   // 10. Spend Analytics
   computeScmSpendSnapshot: (token: string, body: ComputeScmSpendSnapshotBody) =>
-    request<ScmSpendAnalyticsSnapshot[]>("/procurement/spend-analytics/compute", { method: "POST", token, body }),
+    request<ScmSpendAnalyticsSnapshot>("/procurement/spend-analytics/compute", { method: "POST", token, body }),
   scmSpendSnapshots: (token: string, query: { periodType?: ScmSpendAnalyticsPeriodType; organizationUnitId?: string } = {}) => {
     const qs = queryString(query);
     return request<ScmSpendAnalyticsSnapshot[]>(`/procurement/spend-analytics${qs}`, { token });
@@ -2248,94 +2296,126 @@ export const api = {
 
   // --- Project Delivery Advanced (Wave A7) ------------------------------
   projectDeliveryWbs: (token: string, projectId: string) =>
-    request<ProjectWbsNodeView[]>(`/project-delivery/advanced/${projectId}/wbs`, { token }),
+    request<ProjectWbsNodeView[]>(`/project-delivery/projects/${projectId}/wbs`, { token }),
   createProjectDeliveryWbs: (
     token: string,
     projectId: string,
     body: { parentId?: string | null; code: string; name: string; description?: string | null; sortOrder?: number },
-  ) => request<ProjectWbsNode>(`/project-delivery/advanced/${projectId}/wbs`, { method: "POST", token, body }),
+  ) => request<ProjectWbsNode>(`/project-delivery/projects/${projectId}/wbs`, { method: "POST", token, body }),
   updateProjectDeliveryWbs: (
     token: string,
     wbsNodeId: string,
     body: Partial<{ code: string; name: string; description: string | null; sortOrder: number }>,
-  ) => request<ProjectWbsNode>(`/project-delivery/advanced/wbs/${wbsNodeId}`, { method: "PATCH", token, body }),
+  ) => request<ProjectWbsNode>(`/project-delivery/wbs/${wbsNodeId}`, { method: "PATCH", token, body }),
   projectDeliverySchedule: (token: string, projectId: string) =>
-    request<ProjectSchedule>(`/project-delivery/advanced/${projectId}/schedule`, { token }),
+    request<ProjectSchedule>(`/project-delivery/projects/${projectId}/schedule`, { token }),
   projectDeliveryGantt: (token: string, projectId: string) =>
-    request<GanttRow[]>(`/project-delivery/advanced/${projectId}/gantt`, { token }),
+    request<GanttRow[]>(`/project-delivery/projects/${projectId}/gantt`, { token }),
   projectDeliveryDependencies: (token: string, projectId: string) =>
-    request<ProjectActivityDependency[]>(`/project-delivery/advanced/${projectId}/dependencies`, { token }),
+    request<ProjectActivityDependency[]>(`/project-delivery/projects/${projectId}/dependencies`, { token }),
   createProjectDeliveryDependency: (
     token: string,
-    body: { projectId: string; fromActivityId: string; toActivityId: string; type: string; lagDays?: number },
-  ) => request<ProjectActivityDependency>("/project-delivery/advanced/dependencies", { method: "POST", token, body }),
+    projectId: string,
+    body: {
+      predecessorActivityId: string;
+      successorActivityId: string;
+      dependencyType?: "FS" | "SS" | "FF" | "SF";
+      lagDays?: number;
+    },
+  ) =>
+    request<ProjectActivityDependency>(`/project-delivery/projects/${projectId}/dependencies`, {
+      method: "POST",
+      token,
+      body,
+    }),
   deleteProjectDeliveryDependency: (token: string, dependencyId: string) =>
-    request<void>(`/project-delivery/advanced/dependencies/${dependencyId}`, { method: "DELETE", token }),
+    request<void>(`/project-delivery/dependencies/${dependencyId}`, { method: "DELETE", token }),
   projectDeliveryResources: (token: string, activeOnly?: boolean) => {
-    const qs = activeOnly ? "?activeOnly=true" : "";
-    return request<ProjectResource[]>(`/project-delivery/advanced/resources${qs}`, { token });
+    const qs = activeOnly === undefined ? "" : `?activeOnly=${activeOnly}`;
+    return request<ProjectResource[]>(`/project-delivery/resources${qs}`, { token });
   },
   createProjectDeliveryResource: (
     token: string,
-    body: { code: string; name: string; type: string; baseAvailability: string; unitOfMeasure: string },
-  ) => request<ProjectResource>("/project-delivery/advanced/resources", { method: "POST", token, body }),
+    body: {
+      code: string;
+      name: string;
+      resourceType?: "labor" | "equipment" | "material" | "other";
+      unit: string;
+      capacityPerDay?: string | null;
+      costRate?: string | null;
+    },
+  ) => request<ProjectResource>("/project-delivery/resources", { method: "POST", token, body }),
   createProjectDeliveryResourceAssignment: (
     token: string,
     projectId: string,
-    body: { resourceId: string; activityId: string; allocatedQuantity: string; startDate: string; endDate: string },
+    body: { resourceId: string; activityId: string; plannedUnits: string; startDate: string; endDate: string },
   ) =>
-    request<ProjectResourceAssignment>(`/project-delivery/advanced/${projectId}/resource-assignments`, {
+    request<ProjectResourceAssignment>(`/project-delivery/projects/${projectId}/resource-assignments`, {
       method: "POST",
       token,
       body,
     }),
   projectDeliveryResourceLoading: (token: string, projectId: string, from: string, to: string) =>
     request<ResourceLoadingResult>(
-      `/project-delivery/advanced/${projectId}/resource-loading?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      `/project-delivery/projects/${projectId}/resource-loading?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
       { token },
     ),
   projectDeliveryBaselines: (token: string, projectId: string) =>
-    request<ProjectBaseline[]>(`/project-delivery/advanced/${projectId}/baselines`, { token }),
-  createProjectDeliveryBaseline: (token: string, projectId: string, body: { code: string; description?: string | null }) =>
-    request<ProjectBaseline>(`/project-delivery/advanced/${projectId}/baselines`, { method: "POST", token, body }),
+    request<ProjectBaseline[]>(`/project-delivery/projects/${projectId}/baselines`, { token }),
+  createProjectDeliveryBaseline: (token: string, projectId: string, body: { name: string; notes?: string | null }) =>
+    request<ProjectBaseline>(`/project-delivery/projects/${projectId}/baselines`, { method: "POST", token, body }),
   approveProjectDeliveryBaseline: (token: string, baselineId: string) =>
-    request<ProjectBaseline>(`/project-delivery/advanced/baselines/${baselineId}/approve`, { method: "POST", token }),
+    request<ProjectBaseline>(`/project-delivery/baselines/${baselineId}/approve`, { method: "POST", token }),
   projectDeliveryBaselineVariance: (token: string, projectId: string, asOfDate: string) =>
     request<BaselineVarianceResult>(
-      `/project-delivery/advanced/${projectId}/baseline-variance?asOfDate=${encodeURIComponent(asOfDate)}`,
+      `/project-delivery/projects/${projectId}/baseline-variance?asOfDate=${encodeURIComponent(asOfDate)}`,
       { token },
     ),
   projectDeliveryCostEntries: (token: string, projectId: string, asOfDate?: string) => {
     const qs = asOfDate ? `?asOfDate=${encodeURIComponent(asOfDate)}` : "";
-    return request<ProjectCostEntry[]>(`/project-delivery/advanced/${projectId}/cost-entries${qs}`, { token });
+    return request<ProjectCostEntry[]>(`/project-delivery/projects/${projectId}/cost-entries${qs}`, { token });
   },
   createProjectDeliveryCostEntry: (
     token: string,
     projectId: string,
-    body: { activityId: string; entryType: string; amount: string; idempotencyKey: string; entryDate: string; note?: string | null },
-  ) => request<ProjectCostEntry>(`/project-delivery/advanced/${projectId}/cost-entries`, { method: "POST", token, body }),
+    body: {
+      activityId?: string | null;
+      entryType: "actual" | "commitment" | "adjustment";
+      amount: string;
+      currency: string;
+      entryDate: string;
+      sourceDocumentType?: string | null;
+      sourceDocumentId?: string | null;
+      idempotencyKey: string;
+      note?: string | null;
+    },
+  ) => request<ProjectCostEntry>(`/project-delivery/projects/${projectId}/cost-entries`, { method: "POST", token, body }),
   reverseProjectDeliveryCostEntry: (token: string, entryId: string, body?: { note?: string | null }) =>
-    request<ProjectCostEntry>(`/project-delivery/advanced/cost-entries/${entryId}/reverse`, {
+    request<ProjectCostEntry>(`/project-delivery/cost-entries/${entryId}/reverse`, {
       method: "POST",
       token,
       body: body ?? {},
     }),
   postProjectDeliveryCostEntry: (token: string, entryId: string) =>
-    request<ProjectCostEntry>(`/project-delivery/advanced/cost-entries/${entryId}/post`, { method: "POST", token }),
+    request<{ postingId: string; status: "emitted" | "skipped_duplicate" }>(`/project-delivery/cost-entries/${entryId}/post`, { method: "POST", token }),
   projectDeliveryCostPosition: (token: string, projectId: string, asOfDate: string) =>
     request<ProjectCostPosition>(
-      `/project-delivery/advanced/${projectId}/cost-position?asOfDate=${encodeURIComponent(asOfDate)}`,
+      `/project-delivery/projects/${projectId}/cost-position?asOfDate=${encodeURIComponent(asOfDate)}`,
       { token },
     ),
   projectDeliveryEarnedValue: (token: string, projectId: string, asOfDate: string) =>
     request<EarnedValueResult>(
-      `/project-delivery/advanced/${projectId}/earned-value?asOfDate=${encodeURIComponent(asOfDate)}`,
+      `/project-delivery/projects/${projectId}/earned-value?asOfDate=${encodeURIComponent(asOfDate)}`,
       { token },
     ),
   projectDeliveryEarnedValueSnapshots: (token: string, projectId: string) =>
-    request<ProjectEarnedValueSnapshot[]>(`/project-delivery/advanced/${projectId}/earned-value-snapshots`, { token }),
-  createProjectDeliveryEarnedValueSnapshot: (token: string, projectId: string, body: { snapshotDate: string }) =>
-    request<ProjectEarnedValueSnapshot>(`/project-delivery/advanced/${projectId}/earned-value-snapshots`, {
+    request<ProjectEarnedValueSnapshot[]>(`/project-delivery/projects/${projectId}/earned-value-snapshots`, { token }),
+  createProjectDeliveryEarnedValueSnapshot: (
+    token: string,
+    projectId: string,
+    body: { asOfDate: string; notes?: string | null },
+  ) =>
+    request<ProjectEarnedValueSnapshot>(`/project-delivery/projects/${projectId}/earned-value-snapshots`, {
       method: "POST",
       token,
       body,
@@ -2637,7 +2717,7 @@ export const api = {
     request<OpportunityDetailRecord>(`/sales/opportunities/${id}`, { token }),
   createOpportunity: (token: string, body: CreateOpportunityBody) =>
     request<OpportunityRecord>("/sales/opportunities", { method: "POST", token, body }),
-  changeOpportunityStage: (token: string, id: string, body: { stageCode: string; outcome?: string; outcomeReason?: string | null; note?: string | null }) =>
+  changeOpportunityStage: (token: string, id: string, body: { stageCode: string; outcome?: SalesOutcome; outcomeReason?: string | null; note?: string | null }) =>
     request<OpportunityRecord>(`/sales/opportunities/${id}/stage`, { method: "POST", token, body }),
   quotations: (token: string) => request<QuotationRecord[]>("/sales/quotations", { token }),
   quotation: (token: string, id: string) =>
@@ -2712,6 +2792,46 @@ export const api = {
     request<SqAutomationProposalRecord>(`/service-quality/automation/proposals/${id}/approve`, { method: "POST", token, body: { note } }),
   rejectSqAutomationProposal: (token: string, id: string, note: string) =>
     request<SqAutomationProposalRecord>(`/service-quality/automation/proposals/${id}/reject`, { method: "POST", token, body: { note } }),
+
+  // --- Catering vertical (WP-MD-03) ----------------------------------------
+  unitsOfMeasure: (token: string) =>
+    request<CateringUnitOfMeasure[]>("/units-of-measure?activeOnly=true", { token }),
+  cateringMenus: (token: string) => request<CateringMenu[]>("/catering/menus", { token }),
+  createCateringMenu: (token: string, body: CateringMenuInput) =>
+    request<CateringMenu>("/catering/menus", { method: "POST", token, body }),
+  cateringRecipes: (token: string) => request<CateringRecipe[]>("/catering/recipes", { token }),
+  createCateringRecipe: (token: string, body: CateringRecipeInput) =>
+    request<CateringRecipe>("/catering/recipes", { method: "POST", token, body }),
+  cateringRecipeIngredients: (token: string, code: string) =>
+    request<CateringRecipeIngredient[]>(`/catering/recipes/${encodeURIComponent(code)}/ingredients`, { token }),
+  setCateringRecipeIngredients: (
+    token: string,
+    code: string,
+    ingredients: { itemId: string; quantity: string; unitCode: string; sortOrder?: number }[],
+  ) =>
+    request<CateringRecipeIngredient[]>(`/catering/recipes/${encodeURIComponent(code)}/ingredients`, {
+      method: "PUT",
+      token,
+      body: { ingredients },
+    }),
+  cateringRecipeCost: (token: string, code: string, onDate?: string) =>
+    request<CateringRecipeCost>(`/catering/recipes/${encodeURIComponent(code)}/cost`, {
+      method: "POST",
+      token,
+      body: onDate ? { onDate } : {},
+    }),
+  cateringMealPlans: (token: string) => request<CateringMealPlan[]>("/catering/meal-plans", { token }),
+  createCateringMealPlan: (token: string, body: CateringMealPlanInput) =>
+    request<CateringMealPlan>("/catering/meal-plans", { method: "POST", token, body }),
+  cateringMealBatches: (token: string) => request<CateringMealBatch[]>("/catering/meal-batches", { token }),
+  createCateringMealBatch: (token: string, body: CateringMealBatchInput) =>
+    request<CateringMealBatch>("/catering/meal-batches", { method: "POST", token, body }),
+  setCateringMealBatchStatus: (token: string, batchNumber: string, status: CateringBatchStatus) =>
+    request<CateringMealBatch>(`/catering/meal-batches/${encodeURIComponent(batchNumber)}/status`, {
+      method: "POST",
+      token,
+      body: { status },
+    }),
 };
 
 // --- Business Admin Console types (Phase 11C) ---------------------------
@@ -3938,6 +4058,8 @@ export type UpdateProjectDeliveryMilestoneBody = Partial<CreateProjectDeliveryMi
 };
 
 // --- Project Delivery Advanced types (Phase 3) --------------------------
+// Mirrors apps/api/src/modules/project-delivery/advanced/domain/project-delivery-advanced.entity.ts
+// (dates arrive as ISO strings over JSON; money is a 2dp string, quantities 4dp, indices 4dp).
 
 // WBS (Work Breakdown Structure)
 export type ProjectWbsNode = {
@@ -3947,16 +4069,12 @@ export type ProjectWbsNode = {
   code: string;
   name: string;
   description: string | null;
+  depth: number;
   sortOrder: number;
   createdAt: string;
 };
 
-export type ProjectWbsNodeView = {
-  id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  depth: number;
+export type ProjectWbsNodeView = ProjectWbsNode & {
   rolledUpCost: string; // money 2dp
   activityCount: number;
   children: ProjectWbsNodeView[];
@@ -3966,44 +4084,44 @@ export type ProjectWbsNodeView = {
 export type ProjectActivityDependency = {
   id: string;
   projectId: string;
-  fromActivityId: string;
-  toActivityId: string;
-  type: "FS" | "SS" | "FF" | "SF"; // Finish-Start, Start-Start, Finish-Finish, Start-Finish
+  predecessorActivityId: string;
+  successorActivityId: string;
+  dependencyType: "FS" | "SS" | "FF" | "SF"; // Finish-Start, Start-Start, Finish-Finish, Start-Finish
   lagDays: number;
   createdAt: string;
 };
 
 export type ScheduleActivityResult = {
   activityId: string;
-  code: string;
-  name: string;
-  plannedStart: string | null; // YYYY-MM-DD
-  plannedFinish: string | null; // YYYY-MM-DD
-  earlyStart: string | null;
-  earlyFinish: string | null;
-  lateStart: string | null;
-  lateFinish: string | null;
-  totalSlack: number; // days
+  durationDays: number;
+  earliestStart: string; // YYYY-MM-DD
+  earliestFinish: string;
+  latestStart: string;
+  latestFinish: string;
+  totalFloatDays: number;
   isCritical: boolean;
 };
 
 export type ProjectSchedule = {
   projectId: string;
+  computedAt: string;
   activities: ScheduleActivityResult[];
   projectFinish: string | null;
   criticalPath: string[]; // activity IDs
+  unscheduledActivityIds: string[];
+  hasCycle: boolean;
 };
 
 export type GanttRow = {
   activityId: string;
-  code: string;
-  name: string;
-  plannedStart: string | null;
-  plannedFinish: string | null;
-  actualStart: string | null;
-  actualFinish: string | null;
-  percentComplete: number;
+  title: string;
   wbsNodeId: string | null;
+  start: string;
+  finish: string;
+  isCritical: boolean;
+  totalFloatDays: number;
+  progressPercent: number;
+  milestoneCount: number;
 };
 
 // Resources and loading
@@ -4011,9 +4129,11 @@ export type ProjectResource = {
   id: string;
   code: string;
   name: string;
-  type: "labor" | "equipment" | "material";
-  baseAvailability: string; // units per period, 4dp
-  unitOfMeasure: string;
+  resourceType: "labor" | "equipment" | "material" | "other";
+  unit: string;
+  capacityPerDay: string | null; // 4dp
+  costRate: string | null; // money 2dp
+  isActive: boolean;
   createdAt: string;
 };
 
@@ -4022,7 +4142,7 @@ export type ProjectResourceAssignment = {
   projectId: string;
   resourceId: string;
   activityId: string;
-  allocatedQuantity: string; // 4dp
+  plannedUnits: string; // 4dp
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   createdAt: string;
@@ -4031,14 +4151,17 @@ export type ProjectResourceAssignment = {
 export type ResourceOverallocation = {
   resourceId: string;
   resourceCode: string;
-  periodStart: string; // YYYY-MM-DD
-  periodEnd: string;
-  allocatedQuantity: string; // 4dp
-  availableQuantity: string; // 4dp
+  date: string; // YYYY-MM-DD
+  demandedUnits: string; // 4dp
+  capacityUnits: string | null; // 4dp
+  overByUnits: string; // 4dp
+  assignmentIds: string[];
 };
 
 export type ResourceLoadingResult = {
   projectId: string;
+  from: string;
+  to: string;
   overallocations: ResourceOverallocation[];
   isLevellable: boolean;
 };
@@ -4047,98 +4170,114 @@ export type ResourceLoadingResult = {
 export type ProjectBaseline = {
   id: string;
   projectId: string;
-  code: string;
-  description: string | null;
+  version: number;
+  name: string;
+  notes: string | null;
   status: "draft" | "approved" | "superseded";
   approvedAt: string | null;
   approvedByUserId: string | null;
   createdAt: string;
 };
 
-export type ProjectBaselineLine = {
-  id: string;
-  baselineId: string;
+export type BaselineVarianceLine = {
   activityId: string;
-  plannedCost: string; // money 2dp
-  plannedQuantity: string; // 4dp
+  title: string;
+  baselineStart: string | null;
+  baselineFinish: string | null;
+  currentStart: string | null;
+  currentFinish: string | null;
+  startVarianceDays: number | null;
+  finishVarianceDays: number | null;
+  baselineCost: string; // money 2dp
+  actualCost: string; // money 2dp
+  costVariance: string; // money 2dp
+  progressPercent: number;
+  isSlipped: boolean;
 };
 
 export type BaselineVarianceResult = {
   projectId: string;
   baselineId: string;
+  baselineVersion: number;
   asOfDate: string; // YYYY-MM-DD
-  activities: Array<{
-    activityId: string;
-    code: string;
-    name: string;
-    plannedCost: string;
-    actualCost: string;
-    variance: string; // actualCost - plannedCost
-    percentVariance: number;
-  }>;
+  lines: BaselineVarianceLine[];
+  totalBaselineCost: string;
+  totalActualCost: string;
+  totalCostVariance: string;
+  slippedActivityCount: number;
 };
 
 // Cost entries and position
 export type ProjectCostEntry = {
   id: string;
   projectId: string;
-  activityId: string;
+  activityId: string | null;
   entryType: "actual" | "commitment" | "adjustment" | "reversal";
-  amount: string; // money 2dp
+  amount: string; // money 2dp, always non-negative
+  currency: string;
   idempotencyKey: string;
   entryDate: string; // YYYY-MM-DD
-  recordedByUserId: string;
-  recordedAt: string; // ISO timestamp
+  reversesId: string | null;
+  createdByUserId: string | null;
+  createdAt: string; // ISO timestamp
   note: string | null;
-  postingStatus: "emitted" | "skipped_duplicate" | null;
 };
 
 export type ProjectCostPosition = {
   projectId: string;
   asOfDate: string; // YYYY-MM-DD
+  currency: string;
   actualCost: string; // money 2dp
-  commitmentCost: string; // money 2dp
-  estimateToComplete: string; // money 2dp
-  estimateAtCompletion: string; // money 2dp
-  budgetAtCompletion: string; // money 2dp
-  costVariance: string; // money 2dp: estimateAtCompletion - budgetAtCompletion
-  costPerformanceIndex: number;
+  commitmentCost: string;
+  adjustmentCost: string;
+  totalCommittedCost: string;
+  byActivity: Array<{ activityId: string | null; actualCost: string; commitmentCost: string }>;
 };
 
-// Earned value
+// Earned value (indices are 4dp decimal strings such as "1.2500", or null when the denominator is zero)
 export type ProjectEarnedValueSnapshot = {
   id: string;
   projectId: string;
-  snapshotDate: string; // YYYY-MM-DD
+  asOfDate: string; // YYYY-MM-DD
+  currency: string;
   plannedValue: string; // money 2dp
-  earnedValue: string; // money 2dp
-  actualCost: string; // money 2dp
-  schedulePerformanceIndex: number;
-  costPerformanceIndex: number;
+  earnedValue: string;
+  actualCost: string;
+  scheduleVariance: string;
+  costVariance: string;
+  schedulePerformanceIndex: string | null;
+  costPerformanceIndex: string | null;
+  budgetAtCompletion: string;
+  estimateAtCompletion: string | null;
+  estimateToComplete: string | null;
+  varianceAtCompletion: string | null;
+  notes: string | null;
+  createdAt: string;
 };
 
 export type EarnedValueResult = {
   projectId: string;
   asOfDate: string; // YYYY-MM-DD
-  plannedValue: string; // money 2dp
-  earnedValue: string; // money 2dp
-  actualCost: string; // money 2dp
-  scheduleVariance: string; // money 2dp
-  costVariance: string; // money 2dp
-  schedulePerformanceIndex: number;
-  costPerformanceIndex: number;
-  budgetAtCompletion: string; // money 2dp
-  estimateAtCompletion: string; // money 2dp
-  estimateToComplete: string; // money 2dp
-  varianceAtCompletion: string; // money 2dp
-  activities: Array<{
+  currency: string;
+  plannedValue: string;
+  earnedValue: string;
+  actualCost: string;
+  scheduleVariance: string;
+  costVariance: string;
+  schedulePerformanceIndex: string | null;
+  costPerformanceIndex: string | null;
+  budgetAtCompletion: string;
+  estimateAtCompletion: string | null;
+  estimateToComplete: string | null;
+  varianceAtCompletion: string | null;
+  percentComplete: string;
+  lines: Array<{
     activityId: string;
-    code: string;
-    name: string;
-    percentComplete: number;
+    title: string;
     plannedValue: string;
     earnedValue: string;
     actualCost: string;
+    progressPercent: number;
   }>;
 };
 
@@ -4984,7 +5123,13 @@ export type ScmItem = {
   category: string | null;
   unitOfMeasure: string;
   isActive: boolean;
+  grade?: ScmGrade | null;
 };
+
+/** Food-grade separation class; null = unrestricted. */
+export type ScmGrade = "food" | "non_food";
+
+export type WorkOrderType = "regular" | "back_charge";
 
 export type SupplierRecord = {
   id: string;
@@ -5124,6 +5269,7 @@ export type ScmWarehouse = {
   organizationUnitId: string | null;
   address: string | null;
   isActive: boolean;
+  grade?: ScmGrade | null;
   createdAt: string;
   createdBy: string | null;
   updatedAt: string;
@@ -5131,6 +5277,7 @@ export type ScmWarehouse = {
 };
 
 export type CreateScmWarehouseBody = {
+  grade?: ScmGrade | null;
   code: string;
   name: string;
   siteId?: string | null;
@@ -5140,6 +5287,7 @@ export type CreateScmWarehouseBody = {
 };
 
 export type UpdateScmWarehouseBody = {
+  grade?: ScmGrade | null;
   name?: string;
   siteId?: string | null;
   organizationUnitId?: string | null;
@@ -5730,10 +5878,10 @@ export type ScmValuationLayer = {
   receivedDate: string;
   originalQuantity: number;
   remainingQuantity: number;
-  unitCost: number;
-  landedCostAdded: number;
-  effectiveUnitCost: number;
-  totalValue: number;
+  unitCost: number | null;
+  landedCostAdded: number | null;
+  effectiveUnitCost: number | null;
+  totalValue: number | null;
   createdAt: string;
 };
 
@@ -5767,7 +5915,7 @@ export type ScmLandedCost = {
   purchaseOrderId: string;
   costType: string;
   currency: string;
-  amount: number;
+  amount: number | null;
   allocationMethod: ScmLandedCostAllocationMethod;
   status: ScmLandedCostStatus;
   appliedAt: string | null;
@@ -5838,7 +5986,7 @@ export type ScmSupplierBid = {
   supplierId: string;
   submittedAt: string;
   currency: string;
-  totalAmount: number;
+  totalAmount: number | null;
   leadTimeDays: number;
   validUntil: string | null;
   status: ScmSupplierBidStatus;
@@ -6001,8 +6149,8 @@ export type ScmSupplierContract = {
   startDate: string;
   endDate: string;
   currency: string;
-  committedAmount: number;
-  spentAmount: number;
+  committedAmount: number | null;
+  spentAmount: number | null;
   status: ScmSupplierContractStatus;
   workflowInstanceId: string | null;
   termsAndConditions: string | null;
@@ -6050,10 +6198,10 @@ export type ScmSpendAnalyticsSnapshot = {
   organizationUnitId: string | null;
   supplierId: string | null;
   itemCategory: string | null;
-  totalSpend: number;
+  totalSpend: number | null;
   poCount: number;
   itemsPurchasedCount: number;
-  avgPoValue: number;
+  avgPoValue: number | null;
   createdAt: string;
   createdBy: string | null;
 };
@@ -6427,7 +6575,16 @@ export type WorkOrder = {
   completedAt: string | null;
   verificationNotes: string | null;
   verifiedAt: string | null;
+  /** Set once the customer accepts the work; serving can only be recorded after this. */
+  customerAcceptedAt?: string | null;
+  customerAcceptedVia?: string | null;
+  customerAcceptanceComment?: string | null;
+  customerRejectedAt?: string | null;
+  /** Set once costs are finalized; locks further cost items and unlocks invoicing. */
+  costsFinalizedAt?: string | null;
+  costsTotal?: string | null;
   workflowInstanceId: string | null;
+  woType?: WorkOrderType;
 };
 
 export type WorkOrderChecklistItem = {
@@ -6459,7 +6616,96 @@ export type WorkOrderDetail = {
   availableActions: { actionCode: string; name: string; toStepCode: string }[];
 };
 
-export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+export type WorkOrderCostType = "material" | "labor" | "overhead";
+
+export type WorkOrderCostItem = {
+  id: string;
+  workOrderId: string;
+  costType: WorkOrderCostType;
+  description: string | null;
+  quantity: string;
+  unitCost: string;
+  totalCost: string;
+  costCenterId: string | null;
+  recordedAt: string;
+};
+
+export type AddWorkOrderCostItemInput = {
+  costType: WorkOrderCostType;
+  description?: string | null;
+  /** Decimal string, ^\d{1,14}(\.\d{1,4})?$ and > 0. */
+  quantity: string;
+  unitCost: string;
+  costCenterId?: string | null;
+};
+
+export type FinalizeWorkOrderCostsResult = {
+  workOrder: WorkOrder;
+  costsTotal: string;
+  legalEntityId: string;
+  periodId: string | null;
+  outboxEventEmitted: boolean;
+};
+
+export type WorkOrderCustomerInvoice = {
+  id: string;
+  workOrderId: string;
+  invoiceNumber: string;
+  legalEntityId: string;
+  costBasis: string;
+  markupRate: string;
+  baseAmount: string;
+  isTaxable: boolean;
+  taxRate: string | null;
+  taxAmount: string;
+  totalAmount: string;
+  currency: string;
+  arStatus: string;
+  issuedAt: string;
+};
+
+export type CustomerInvoiceListItem = {
+  id: string;
+  invoiceNumber: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  workOrderTitle: string;
+  customerId: string;
+  customerName: string;
+  siteName: string | null;
+  invoiceDate: string;
+  createdAt: string;
+  costBasis: string;
+  markupRate: string;
+  baseAmount: string;
+  taxRate: string | null;
+  taxAmount: string;
+  totalAmount: string;
+  currency: string;
+  status: string;
+  arStatus: string;
+};
+
+export type CustomerInvoiceFilter = {
+  arStatus?: string;
+  customerId?: string;
+  /** YYYY-MM-DD */
+  from?: string;
+  /** YYYY-MM-DD */
+  to?: string;
+  q?: string;
+};
+
+export type CreateWorkOrderInvoiceInput = {
+  legalEntityId: string;
+  /** Fraction string, e.g. "0.15". */
+  markupRate?: string;
+  isTaxable: boolean;
+  /** Fraction string, e.g. "0.11". */
+  taxRate?: string;
+};
+
+export type MealType ="breakfast" | "lunch" | "dinner" | "snack";
 
 export type WorkOrderServingLog = {
   id: string;
@@ -7309,8 +7555,11 @@ export type PriceBookRecord = {
   tenantId: string;
   code: string;
   name: string;
-  currency: string;
-  isStandard: boolean;
+  description: string | null;
+  currencyCode: string;
+  customerId: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -7320,29 +7569,36 @@ export type PriceBookEntryRecord = {
   id: string;
   tenantId: string;
   priceBookId: string;
-  itemSku: string;
+  serviceId: string;
+  unitCode: string;
   unitPrice: number;
   minQuantity: number;
-  maxQuantity: number | null;
-  unitOfMeasure: string;
   createdAt: string;
   updatedAt: string;
 };
 
+export type SalesOutcome = "open" | "won" | "lost" | "cancelled";
+
 export type OpportunityRecord = {
   id: string;
   tenantId: string;
-  code: string;
-  title: string;
+  opportunityNumber: string;
   customerId: string;
-  leadSource: string;
+  contractId: string | null;
+  projectId: string | null;
+  siteId: string | null;
+  customerContactId: string | null;
+  title: string;
+  description: string | null;
   stageCode: string;
-  estimatedValue: number | null;
-  currency: string;
-  confidencePercent: number | null;
-  targetCloseDate: string | null;
-  outcome: string | null;
+  sourceCode: string | null;
+  outcome: SalesOutcome;
   outcomeReason: string | null;
+  closedAt: string | null;
+  currencyCode: string;
+  estimatedValue: number | null;
+  probabilityPercent: number | null;
+  expectedCloseDate: string | null;
   ownerUserId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -7354,8 +7610,7 @@ export type OpportunityStageHistoryRecord = {
   fromStageCode: string | null;
   toStageCode: string;
   fromOutcome: string | null;
-  toOutcome: string | null;
-  outcomeReason: string | null;
+  toOutcome: string;
   note: string | null;
   changedBy: string | null;
   changedAt: string;
@@ -7363,97 +7618,123 @@ export type OpportunityStageHistoryRecord = {
 
 export type OpportunityDetailRecord = {
   opportunity: OpportunityRecord;
-  customer: Customer | null;
-  stageHistory: OpportunityStageHistoryRecord[];
+  history: OpportunityStageHistoryRecord[];
+  quotations: QuotationRecord[];
 };
 
+/** One row per stage + outcome. */
 export type OpportunityPipelineSummary = {
   stageCode: string;
-  count: number;
-  totalEstimatedValue: number;
+  outcome: SalesOutcome;
+  opportunityCount: number;
+  estimatedValueTotal: number;
+  weightedValueTotal: number;
 };
+
+export type QuotationStatus =
+  | "draft"
+  | "in_approval"
+  | "issued"
+  | "accepted"
+  | "declined"
+  | "expired"
+  | "withdrawn";
 
 export type QuotationRecord = {
   id: string;
   tenantId: string;
-  code: string;
-  opportunityId: string | null;
+  quotationNumber: string;
+  opportunityId: string;
   customerId: string;
   priceBookId: string | null;
-  revisionNumber: number;
-  status: string;
+  revision: number;
+  supersedesQuotationId: string | null;
+  title: string;
+  notes: string | null;
+  currencyCode: string;
+  subtotalAmount: number;
+  discountAmount: number;
+  taxAmount: number;
   totalAmount: number;
-  currency: string;
   validUntil: string | null;
   issuedAt: string | null;
-  acceptedAt: string | null;
-  declinedAt: string | null;
-  withdrawnAt: string | null;
-  notes: string | null;
+  status: QuotationStatus;
+  customerDecisionNote: string | null;
+  customerDecidedAt: string | null;
+  customerDecidedBy: string | null;
+  workflowInstanceId: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-export type QuotationItemRecord = {
+export type QuotationLineRecord = {
   id: string;
+  tenantId: string;
   quotationId: string;
-  itemSku: string | null;
-  description: string;
-  unitPrice: number;
+  lineNumber: number;
+  serviceId: string | null;
+  serviceCodeSnapshot: string;
+  serviceNameSnapshot: string;
+  description: string | null;
+  unitCode: string;
   quantity: number;
-  discountPercent: number;
+  unitPrice: number;
+  discountAmount: number;
   lineTotal: number;
-  sortOrder: number;
+  priceSource: "price_book" | "manual";
+  priceBookEntryId: string | null;
+  createdAt: string;
 };
 
 export type QuotationDetailRecord = {
   quotation: QuotationRecord;
-  customer: Customer | null;
-  opportunity: OpportunityRecord | null;
-  items: QuotationItemRecord[];
+  lines: QuotationLineRecord[];
+  status: { stepCode: string | null; stepName: string | null; instanceStatus: string } | null;
 };
 
 export type CreatePriceBookBody = {
   code: string;
   name: string;
-  currency: string;
-  isStandard?: boolean;
+  description?: string | null;
+  currencyCode: string;
+  customerId?: string | null;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
 };
 
 export type AddPriceBookEntryBody = {
-  itemSku: string;
+  serviceId: string;
+  unitCode: string;
   unitPrice: number;
   minQuantity?: number;
-  maxQuantity?: number | null;
-  unitOfMeasure?: string;
 };
 
 export type CreateOpportunityBody = {
-  code: string;
-  title: string;
   customerId: string;
-  leadSource?: string;
-  stageCode?: string;
+  title: string;
+  description?: string | null;
+  stageCode: string;
+  sourceCode?: string | null;
+  currencyCode: string;
   estimatedValue?: number | null;
-  currency?: string;
-  confidencePercent?: number | null;
-  targetCloseDate?: string | null;
+  probabilityPercent?: number | null;
+  expectedCloseDate?: string | null;
 };
 
 export type CreateQuotationBody = {
-  code: string;
-  opportunityId?: string | null;
-  customerId: string;
-  priceBookId?: string | null;
-  currency?: string;
-  validUntil?: string | null;
+  opportunityId: string;
+  title: string;
   notes?: string | null;
-  items: {
-    itemSku?: string | null;
-    description: string;
-    unitPrice: number;
+  validUntil?: string | null;
+  taxAmount?: number | null;
+  lines: {
+    serviceId: string;
+    description?: string | null;
+    unitCode?: string | null;
     quantity: number;
-    discountPercent?: number;
+    /** Omit to resolve from the applicable price book. */
+    unitPrice?: number | null;
+    discountAmount?: number | null;
   }[];
 };
 
@@ -7752,4 +8033,109 @@ export type CreateSqAutomationRuleBody = {
   scoreThreshold?: number | null;
   proposedAction: string;
   actionParameters?: Record<string, unknown>;
+};
+
+// --- Catering vertical types (WP-MD-03) -----------------------------------
+
+export type CateringUnitOfMeasure = {
+  id: string;
+  code: string;
+  name: string;
+  category: "qty" | "vol" | "mass" | "length";
+  isActive: boolean;
+};
+
+export type CateringMealType = "breakfast" | "lunch" | "dinner" | "snack";
+export type CateringBatchStatus = "draft" | "confirmed" | "consumed";
+
+export type CateringMenu = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+};
+export type CateringMenuInput = {
+  code: string;
+  name: string;
+  description?: string | null;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+};
+
+export type CateringRecipe = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  outputItemId: string;
+  outputQuantity: string;
+  outputUnitId: string;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+};
+export type CateringRecipeInput = {
+  code: string;
+  name: string;
+  description?: string | null;
+  outputItemId: string;
+  outputQuantity: string;
+  outputUnitCode: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+};
+
+export type CateringRecipeIngredient = {
+  id: string;
+  recipeId: string;
+  itemId: string;
+  quantity: string;
+  unitId: string;
+  sortOrder: number;
+};
+
+export type CateringRecipeCost = {
+  recipeCode: string;
+  outputQuantity: string;
+  lines: { itemId: string; itemName: string; quantity: string; unitCost: string; lineCost: string }[];
+  totalCost: string;
+};
+
+export type CateringMealPlan = {
+  id: string;
+  menuId: string;
+  siteId: string | null;
+  mealDate: string;
+  mealType: CateringMealType;
+  plannedPortions: number;
+  notes: string | null;
+};
+export type CateringMealPlanInput = {
+  menuCode: string;
+  siteId?: string | null;
+  mealDate: string;
+  mealType: CateringMealType;
+  plannedPortions?: number;
+  notes?: string | null;
+};
+
+export type CateringMealBatch = {
+  id: string;
+  batchNumber: string;
+  mealPlanId: string | null;
+  recipeId: string;
+  outputItemId: string;
+  outputQuantity: string;
+  outputUnitId: string;
+  status: CateringBatchStatus;
+  producedAt: string | null;
+};
+export type CateringMealBatchInput = {
+  batchNumber: string;
+  recipeCode: string;
+  mealPlanId?: string | null;
+  outputQuantity?: string;
 };

@@ -87,14 +87,35 @@ export function EmployeesPage() {
     void load();
   }, [load]);
 
+  // Reports missing/invalid fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>, invalid: Array<[boolean, string]> = []): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return false;
+    }
+    const bad = invalid.filter(([isBad]) => isBad).map(([, label]) => label);
+    if (bad.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: bad.join(", ") }));
+      return false;
+    }
+    return true;
+  }
+
   async function createEmployee() {
+    if (!requireFields(
+      [[fullName.trim(), t("mw.emp.f.fullName")]],
+      [[email.trim() !== "" && !/^\S+@\S+\.\S+$/.test(email.trim()), t("mw.emp.f.email")]],
+    )) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       await api.createEmployee(token, {
-        fullName,
-        email: email || null,
+        fullName: fullName.trim(),
+        email: email.trim() || null,
         positionCode: positionCode || null,
         legalEntityId: legalEntityId || null,
         organizationUnitId: organizationUnitId || null,
@@ -173,8 +194,8 @@ export function EmployeesPage() {
             <Field label={t("mw.emp.f.joined")}>
               <Input type="date" value={joinedAt} onChange={(e) => setJoinedAt(e.target.value)} />
             </Field>
-            <Button disabled={busy || !fullName} onClick={() => void createEmployee()}>
-              Create
+            <Button disabled={busy} onClick={() => void createEmployee()}>
+              {t("common.create")}
             </Button>
           </div>
         </div>

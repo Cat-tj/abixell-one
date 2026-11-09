@@ -146,7 +146,58 @@ export function FinanceAssetsPage() {
     void load();
   }, [load]);
 
+  // Validation message, shown next to the form that produced it.
+  const [formMsg, setFormMsg] = useState<{ scope: "book" | "run" | "dispose" | "reverse"; text: string } | null>(null);
+
+  function formProblem(
+    scope: "book" | "run" | "dispose" | "reverse",
+    kind: "missing" | "invalid",
+    fields: Array<string | null>,
+  ): boolean {
+    const list = fields.filter((x): x is string => x !== null);
+    if (list.length === 0) return false;
+    setNotice(null);
+    setError(null);
+    setFormMsg({
+      scope,
+      text: t(kind === "missing" ? "common.form.missing" : "common.form.invalid", { fields: list.join(", ") }),
+    });
+    return true;
+  }
+
+  // A comma is accepted as the decimal separator ("12,5" -> "12.5").
+  const decimal = (v: string) => v.trim().replace(",", ".");
+  // Whole numbers accept "1.500", "60 bulan" and the like: keep only the digits.
+  const digits = (v: string) => v.replace(/\D/g, "");
+
   async function createBook() {
+    const lifeDigits = digits(usefulLifeMonths);
+    if (
+      formProblem("book", "missing", [
+        !assetId ? t("finAssets.asset") : null,
+        !ledgerId ? t("finAssets.ledger") : null,
+        !bookCode.trim() ? t("finAssets.bookCode") : null,
+        !assetClass.trim() ? t("finAssets.assetClass") : null,
+        !capitalizationDate ? t("finAssets.capitalizedOn") : null,
+        !inServiceDate ? t("finAssets.inServiceOn") : null,
+        acquisitionCost.trim() === "" ? t("finAssets.acquisitionCost") : null,
+        lifeDigits === "" ? t("finAssets.usefulLife") : null,
+        !expenseAccountId ? t("finAssets.expenseAccount") : null,
+        !accumulatedAccountId ? t("finAssets.accumulatedAccount") : null,
+      ])
+    ) {
+      return;
+    }
+    if (
+      formProblem("book", "invalid", [
+        !isValidAmountInput(decimal(acquisitionCost)) ? t("finAssets.acquisitionCost") : null,
+        // API: usefulLifeMonths is a positive whole number.
+        !/^[1-9]\d*$/.test(lifeDigits) ? t("finAssets.usefulLife") : null,
+      ])
+    ) {
+      return;
+    }
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -160,9 +211,9 @@ export function FinanceAssetsPage() {
         capitalizationDate,
         inServiceDate,
         // Verbatim text at 2 decimals.
-        acquisitionCost: acquisitionCost.trim(),
-        residualValue: residualValue.trim() || "0.00",
-        usefulLifeMonths: Number(usefulLifeMonths),
+        acquisitionCost: decimal(acquisitionCost),
+        residualValue: decimal(residualValue) || "0.00",
+        usefulLifeMonths: Number(digits(usefulLifeMonths)),
         depreciationExpenseAccountId: expenseAccountId,
         accumulatedDepreciationAccountId: accumulatedAccountId,
       });
@@ -193,6 +244,15 @@ export function FinanceAssetsPage() {
   }
 
   async function runDepreciation() {
+    if (
+      formProblem("run", "missing", [
+        !runBookCode.trim() ? t("finAssets.bookCode") : null,
+        !runPeriodId ? t("finAcct.period") : null,
+      ])
+    ) {
+      return;
+    }
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -220,6 +280,15 @@ export function FinanceAssetsPage() {
 
   async function dispose() {
     if (!disposeTarget) return;
+    if (
+      formProblem("dispose", "missing", [
+        !disposeDate ? t("finAssets.disposalDate") : null,
+        !disposeEvidence.trim() ? t("finAssets.evidenceId") : null,
+      ])
+    ) {
+      return;
+    }
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -227,7 +296,7 @@ export function FinanceAssetsPage() {
       await api.accountingDisposeAssetBook(token, disposeTarget.id, {
         disposalDate: disposeDate,
         evidenceDocumentId: disposeEvidence.trim(),
-        proceeds: disposeProceeds.trim() || null,
+        proceeds: decimal(disposeProceeds) || null,
         note: null,
         idempotencyKey: newIdempotencyKey(),
       });
@@ -246,6 +315,8 @@ export function FinanceAssetsPage() {
 
   async function reverseRun() {
     if (!reverseTarget) return;
+    if (formProblem("reverse", "missing", [reverseReason.trim() === "" ? t("finTxDetail.reason") : null])) return;
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -423,7 +494,7 @@ export function FinanceAssetsPage() {
                 label={t("finAssets.acquisitionCost")}
                 required
                 hint={
-                  acquisitionCost && !isValidAmountInput(acquisitionCost)
+                  acquisitionCost && !isValidAmountInput(decimal(acquisitionCost))
                     ? t("finAssets.amountHint")
                     : undefined
                 }
@@ -432,8 +503,8 @@ export function FinanceAssetsPage() {
                   inputMode="decimal"
                   value={acquisitionCost}
                   onChange={(e) => setAcquisitionCost(e.target.value)}
-                  placeholder="250000000.00"
-                  aria-invalid={acquisitionCost !== "" && !isValidAmountInput(acquisitionCost)}
+                  placeholder={t("common.form.example", { value: "250000000.00" })}
+                  aria-invalid={acquisitionCost !== "" && !isValidAmountInput(decimal(acquisitionCost))}
                 />
               </Field>
               <Field label={t("finAssets.residualValue")} hint={t("finAssets.residualHint")}>
@@ -467,20 +538,14 @@ export function FinanceAssetsPage() {
                 </Select>
               </Field>
             </div>
+            {formMsg?.scope === "book" ? (
+              <div className="mt-3">
+                <Alert tone="error">{formMsg.text}</Alert>
+              </div>
+            ) : null}
             <div className="mt-3">
               <Button
-                disabled={
-                  busy ||
-                  !assetId ||
-                  !ledgerId ||
-                  !bookCode.trim() ||
-                  !assetClass.trim() ||
-                  !capitalizationDate ||
-                  !inServiceDate ||
-                  !isValidAmountInput(acquisitionCost) ||
-                  !expenseAccountId ||
-                  !accumulatedAccountId
-                }
+                disabled={busy}
                 onClick={() => void createBook()}
               >
                 {t("finAssets.createBook")}
@@ -517,13 +582,18 @@ export function FinanceAssetsPage() {
               </Field>
               <div className="flex items-end">
                 <Button
-                  disabled={busy || !runBookCode.trim() || !runPeriodId || !books.some((b) => b.status === "active")}
+                  disabled={busy || !books.some((b) => b.status === "active")}
                   onClick={() => void runDepreciation()}
                 >
                   {t("finAssets.run")}
                 </Button>
               </div>
             </div>
+            {formMsg?.scope === "run" ? (
+              <div className="mt-3">
+                <Alert tone="error">{formMsg.text}</Alert>
+              </div>
+            ) : null}
             {!books.some((b) => b.status === "active") ? (
               <p className="mt-2 text-xs text-ink-faint">{t("finAssets.nothingActive")}</p>
             ) : null}
@@ -553,7 +623,7 @@ export function FinanceAssetsPage() {
                   <Input
                     value={disposeEvidence}
                     onChange={(e) => setDisposeEvidence(e.target.value)}
-                    placeholder="UUID"
+                    placeholder={t("common.form.example", { value: "UUID" })}
                   />
                 </Field>
                 <Field label={t("finAssets.proceeds")}>
@@ -561,12 +631,17 @@ export function FinanceAssetsPage() {
                     inputMode="decimal"
                     value={disposeProceeds}
                     onChange={(e) => setDisposeProceeds(e.target.value)}
-                    placeholder="0.00"
+                    placeholder={t("common.form.example", { value: "0.00" })}
                   />
                 </Field>
               </div>
+              {formMsg?.scope === "dispose" ? (
+                <div className="mt-3">
+                  <Alert tone="error">{formMsg.text}</Alert>
+                </div>
+              ) : null}
               <div className="mt-3 flex gap-2">
-                <Button disabled={busy || !disposeDate || !disposeEvidence.trim()} onClick={() => void dispose()}>
+                <Button disabled={busy} onClick={() => void dispose()}>
                   {t("finAssets.dispose")}
                 </Button>
                 <Button variant="ghost" onClick={() => setDisposeTarget(null)}>
@@ -588,8 +663,13 @@ export function FinanceAssetsPage() {
               <Field label={t("finTxDetail.reason")} required>
                 <Input value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
               </Field>
+              {formMsg?.scope === "reverse" ? (
+                <div className="mt-3">
+                  <Alert tone="error">{formMsg.text}</Alert>
+                </div>
+              ) : null}
               <div className="mt-3 flex gap-2">
-                <Button disabled={busy || reverseReason.trim() === ""} onClick={() => void reverseRun()}>
+                <Button disabled={busy} onClick={() => void reverseRun()}>
                   {t("finAssets.reverseRun")}
                 </Button>
                 <Button variant="ghost" onClick={() => setReverseTarget(null)}>

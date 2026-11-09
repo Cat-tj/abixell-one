@@ -190,7 +190,7 @@ export function registerWorkflowRoutes(app: FastifyInstance, container: Containe
 
   app.post("/workflow/instances", { preHandler: app.authenticate }, async (request, reply) => {
     const body = startInstanceSchema.parse(request.body);
-    const result = await container.workflow.startInstance(request.actor!, body);
+    const result = await container.workflow.startInstanceFromRequest(request.actor!, body);
     return reply.status(201).send(result);
   });
 

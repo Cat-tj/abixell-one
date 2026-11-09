@@ -20,6 +20,8 @@ export interface AuthorizedCustomer {
 
 export interface CustomerScopePort {
   listScopedCustomerIds(actor: ActorContext): Promise<string[]>;
+  /** Customer ids covered by the actor's ACTIVE assignment only (site-scoping of tasks). */
+  listScopedCustomerIdsForActor(actor: ActorContext): Promise<string[]>;
   getAuthorized(actor: ActorContext, customerId: string): Promise<AuthorizedCustomer>;
   canAccessForDocument(actor: ActorContext, customerId: string): Promise<boolean>;
 }
@@ -90,6 +92,16 @@ export function workRequestState(request: WorkRequest): WorkRequestState {
 // Work Order (executable unit) — SO-CORE-003 … SO-CORE-010
 // ---------------------------------------------------------------------------
 
+/** Work Order billing type. `back_charge` = billable work done WITHOUT a
+ * delivery contract; contract-price resolution never applies to it. */
+export const WORK_ORDER_TYPES = ["regular", "back_charge"] as const;
+export type WorkOrderType = (typeof WORK_ORDER_TYPES)[number];
+
+/** Whether contract-price resolution applies to a Work Order. */
+export function workOrderUsesContractPricing(wo: { woType: WorkOrderType }): boolean {
+  return wo.woType !== "back_charge";
+}
+
 export interface WorkOrder {
   id: string;
   tenantId: string;
@@ -97,6 +109,8 @@ export interface WorkOrder {
   workRequestId: string | null;
   customerId: string;
   contractId: string | null;
+  /** 'regular' (default) | 'back_charge'. Set at creation only. */
+  woType: WorkOrderType;
   projectId: string | null;
   siteId: string | null;
   serviceDefinitionId: string;
@@ -204,6 +218,38 @@ export interface CustomerInvoice {
   issuedBy: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Flat row for the tenant-wide invoice list (invoice + WO/customer/site names). */
+export interface CustomerInvoiceListItem {
+  id: string;
+  invoiceNumber: string;
+  workOrderId: string;
+  workOrderNumber: string;
+  workOrderTitle: string;
+  customerId: string;
+  customerName: string;
+  siteName: string | null;
+  invoiceDate: Date;
+  createdAt: Date;
+  costBasis: string;
+  markupRate: string;
+  baseAmount: string;
+  taxRate: string | null;
+  taxAmount: string;
+  totalAmount: string;
+  currency: string;
+  status: string;
+  arStatus: string;
+}
+
+export interface CustomerInvoiceListFilter {
+  workOrderIds: string[];
+  arStatus?: string;
+  customerId?: string;
+  from?: string;
+  to?: string;
+  q?: string;
 }
 
 export interface CreateInvoiceInput {
@@ -344,6 +390,7 @@ export interface CreateWorkOrderInput {
   workRequestId?: string | null;
   customerId: string;
   contractId?: string | null;
+  woType?: WorkOrderType;
   projectId?: string | null;
   siteId?: string | null;
   serviceDefinitionId: string;
@@ -424,7 +471,16 @@ export interface ServiceOperationsRepository {
   findWorkOrderById(id: string): Promise<WorkOrder | null>;
   listWorkOrders(
     tenantId: string,
-    filter: { customerIds?: string[]; assignedToUserId?: string; siteId?: string },
+    filter: {
+      customerIds?: string[];
+      assignedToUserId?: string;
+      siteId?: string;
+      /** OR-combined visibility narrowing (site-scoping): a Work Order is
+       * returned when its customer is in `customerIds`, OR it is assigned to
+       * `assignedToUserId`, OR its Workflow Instance is in `workflowInstanceIds`.
+       * AND-combined with the other filters. */
+      visibleTo?: { customerIds: string[]; assignedToUserId: string; workflowInstanceIds: string[] };
+    },
   ): Promise<WorkOrder[]>;
   setWorkOrderWorkflowInstance(id: string, workflowInstanceId: string): Promise<void>;
   assignWorkOrder(id: string, assigneeUserId: string, assignedByUserId: string): Promise<WorkOrder | null>;
@@ -530,6 +586,7 @@ export interface ServiceOperationsRepository {
     client?: PoolClient,
   ): Promise<CustomerInvoice | null>;
   findInvoiceByWorkOrder(tenantId: string, workOrderId: string): Promise<CustomerInvoice | null>;
+  listInvoices(tenantId: string, filter: CustomerInvoiceListFilter): Promise<CustomerInvoiceListItem[]>;
 
   // Work Order serving log (SO-CORE-016)
   createServingLog(input: CreateServingLogInput): Promise<WorkOrderServingLog>;

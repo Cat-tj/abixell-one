@@ -17,6 +17,10 @@ import type { Container } from "../../../../composition-root.js";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
 const dateTimeSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, "expected an ISO date-time");
+/** Permit validity is a timestamp: accept a plain date (start of day) or a full date-time. */
+const dateOrDateTimeSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}.*)?$/, "expected YYYY-MM-DD or an ISO date-time");
 const decimalSchema = z.string().regex(/^-?\d{1,16}(\.\d{1,4})?$/, "expected a 4-decimal number");
 const riskAssessmentTypeSchema = z.enum(["jsa", "hira"]);
 const auditProgrammeTypeSchema = z.enum(["inspection", "audit"]);
@@ -207,8 +211,8 @@ export function registerHseAdvancedRoutes(app: FastifyInstance, container: Conta
         projectId: z.string().uuid().nullable().optional(),
         siteId: z.string().uuid().nullable().optional(),
         locationDetail: z.string().nullable().optional(),
-        validFrom: dateSchema,
-        validTo: dateSchema,
+        validFrom: dateOrDateTimeSchema,
+        validTo: dateOrDateTimeSchema,
         isolationConditions: z
           .array(
             z.object({
@@ -240,8 +244,8 @@ export function registerHseAdvancedRoutes(app: FastifyInstance, container: Conta
         projectId: z.string().uuid().nullable().optional(),
         siteId: z.string().uuid().nullable().optional(),
         locationDetail: z.string().nullable().optional(),
-        validFrom: dateSchema.optional(),
-        validTo: dateSchema.optional(),
+        validFrom: dateOrDateTimeSchema.optional(),
+        validTo: dateOrDateTimeSchema.optional(),
         isolationConditions: z
           .array(
             z.object({

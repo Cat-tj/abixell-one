@@ -157,25 +157,25 @@ export function ServiceOptimizationDetailPage() {
       <Card>
         <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{t("so.optd.t.targetDate")}</div>
+            <div className="text-xs font-bold text-slate-400">{t("so.optd.t.targetDate")}</div>
             <div className="mt-1 font-semibold text-slate-900">{run.targetDate}</div>
           </div>
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{t("so.optd.t.proposals")}</div>
+            <div className="text-xs font-bold text-slate-400">{t("so.optd.t.proposals")}</div>
             <div className="mt-1 font-semibold text-slate-900">{run.proposals.length}</div>
           </div>
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{t("so.optd.t.maxPerWorker")}</div>
+            <div className="text-xs font-bold text-slate-400">{t("so.optd.t.maxPerWorker")}</div>
             <div className="mt-1 font-semibold text-slate-900">
               {run.parameters.maxWorkOrdersPerWorker ?? "Default"}
             </div>
           </div>
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{t("so.optd.t.generated")}</div>
+            <div className="text-xs font-bold text-slate-400">{t("so.optd.t.generated")}</div>
             <div className="mt-1 text-slate-900">{formatDate(run.createdAt)}</div>
           </div>
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{t("so.optd.t.organizationUnit")}</div>
+            <div className="text-xs font-bold text-slate-400">{t("so.optd.t.organizationUnit")}</div>
             <div className="mt-1 break-all font-mono text-xs text-slate-700">
               {run.organizationUnitId ?? "Tenant-wide"}
             </div>
@@ -254,7 +254,7 @@ export function ServiceOptimizationDetailPage() {
                       : "Confirm Dismissal"}
                 </Button>
                 <Button variant="ghost" disabled={busy} onClick={() => setConfirmAction(null)}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </div>
             </div>

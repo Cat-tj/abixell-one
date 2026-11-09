@@ -162,7 +162,7 @@ export function ComplaintCreatePage() {
                 {submitting ? "Submitting…" : "Create complaint"}
               </Button>
               <Button type="button" variant="secondary" onClick={() => navigate("/complaints")}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           </form>

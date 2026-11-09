@@ -191,7 +191,11 @@ export function WorkflowPanel({
   );
 
   async function handleStartInstance() {
-    if (startBusy.current || !startOrgUnitId || !canStart) return;
+    if (startBusy.current || !canStart) return;
+    if (!startOrgUnitId) {
+      setStartError(t("common.form.missing", { fields: t("workflow.orgUnit") }));
+      return;
+    }
     const life = lifetime.current;
     startBusy.current = true;
     setStartPending(true);
@@ -491,7 +495,7 @@ export function WorkflowPanel({
             <Button variant="secondary" disabled={startPending} onClick={() => setStartOpen(false)}>
               {t("workflow.cancel")}
             </Button>
-            <Button disabled={startPending || !startOrgUnitId} onClick={() => void handleStartInstance()}>
+            <Button disabled={startPending} onClick={() => void handleStartInstance()}>
               {startPending ? t("workflow.starting") : t("workflow.startWorkflow")}
             </Button>
           </>

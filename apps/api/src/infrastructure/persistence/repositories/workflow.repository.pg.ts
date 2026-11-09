@@ -528,6 +528,74 @@ export class PgWorkflowRepository implements WorkflowRepository {
     return result.rows.map(mapAssignment);
   }
 
+  async listAssociationCandidateAssignments(
+    tenantId: string,
+    userId: string,
+    roleCode: string | null,
+    instanceIds?: string[],
+  ): Promise<WorkflowInstanceAssignment[]> {
+    const result = await this.pool.query(
+      `SELECT wia.* FROM workflow_instance_assignments wia
+         JOIN workflow_instances wi ON wi.id = wia.workflow_instance_id
+        WHERE wi.tenant_id = $1
+          AND ($4::uuid[] IS NULL OR wia.workflow_instance_id = ANY($4::uuid[]))
+          AND (
+            (wia.assignment_type = 'specific_user' AND wia.assigned_user_id = $2)
+            OR (wia.assignment_type <> 'specific_user' AND $3::text IS NOT NULL AND wia.assigned_role_code = $3)
+          )
+        ORDER BY wia.assigned_at`,
+      [tenantId, userId, roleCode, instanceIds ?? null],
+    );
+    return result.rows.map(mapAssignment);
+  }
+
+  async listInstancesNarrowed(
+    tenantId: string,
+    narrow: {
+      startedBy: string;
+      instanceIds: string[];
+      organizationUnitIds: string[];
+      legalEntityIds: string[];
+      customerIds: string[];
+    },
+  ): Promise<WorkflowInstance[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM workflow_instances
+        WHERE tenant_id = $1
+          AND (
+            started_by = $2
+            OR id = ANY($3::uuid[])
+            OR context_data->>'organizationUnitId' = ANY($4::text[])
+            OR context_data->>'legalEntityId' = ANY($5::text[])
+            OR context_data->>'customerId' = ANY($6::text[])
+          )
+        ORDER BY started_at DESC`,
+      [
+        tenantId,
+        narrow.startedBy,
+        narrow.instanceIds,
+        narrow.organizationUnitIds,
+        narrow.legalEntityIds,
+        narrow.customerIds,
+      ],
+    );
+    return result.rows.map(mapInstance);
+  }
+
+  async listInstanceIdsStartedBy(
+    tenantId: string,
+    userId: string,
+    instanceIds?: string[],
+  ): Promise<string[]> {
+    const result = await this.pool.query(
+      `SELECT id FROM workflow_instances
+        WHERE tenant_id = $1 AND started_by = $2
+          AND ($3::uuid[] IS NULL OR id = ANY($3::uuid[]))`,
+      [tenantId, userId, instanceIds ?? null],
+    );
+    return result.rows.map((r) => r.id as string);
+  }
+
   async claimAssignment(id: string, userId: string, ttlSeconds: number): Promise<WorkflowInstanceAssignment | null> {
     const result = await this.pool.query(
       `UPDATE workflow_instance_assignments

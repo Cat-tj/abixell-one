@@ -21,6 +21,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatMoney } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 export function SpendAnalyticsPage() {
   const { session } = useAuth();
@@ -30,9 +31,9 @@ export function SpendAnalyticsPage() {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 1);
-    return d.toISOString().slice(0, 10);
+    return localDateInputValue(d);
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => localDateInputValue());
 
   const [snapshots, setSnapshots] = useState<ScmSpendAnalyticsSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,13 +63,14 @@ export function SpendAnalyticsPage() {
     setError(null);
     setNotice(null);
     try {
-      const computed = await api.computeScmSpendSnapshot(token, {
+      // Compute returns the one snapshot it wrote; reload the list to show it.
+      await api.computeScmSpendSnapshot(token, {
         periodType: "monthly",
         periodStart: startDate,
         periodEnd: endDate,
       });
-      setSnapshots(computed);
-      setNotice(`Spend analytics snapshots recomputed (${computed.length} periods).`);
+      setSnapshots(await api.scmSpendSnapshots(token));
+      setNotice(t("scm.spend.msg.recomputed"));
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : t("scm.spend.msg.failedToRecomputeSpendAnalytics"));
     } finally {
@@ -76,7 +78,10 @@ export function SpendAnalyticsPage() {
     }
   }
 
-  const totalSpend = snapshots.reduce((sum, s) => sum + s.totalSpend, 0);
+  // Null for viewers without the price permission; show a dash, not a misleading 0.
+  const totalSpend: number | null = snapshots.some((s) => s.totalSpend === null)
+    ? null
+    : snapshots.reduce((sum, s) => sum + (s.totalSpend ?? 0), 0);
   const totalPOs = snapshots.reduce((sum, s) => sum + s.poCount, 0);
   const totalItems = snapshots.reduce((sum, s) => sum + s.itemsPurchasedCount, 0);
 
@@ -97,11 +102,11 @@ export function SpendAnalyticsPage() {
     },
     {
       header: t("scm.spend.h.avgPoValue"),
-      cell: (r) => <span className="font-mono">{formatMoney(String(r.avgPoValue))}</span>,
+      cell: (r) => <span className="font-mono">{formatMoney(r.avgPoValue)}</span>,
     },
     {
       header: t("scm.spend.h.totalSpend"),
-      cell: (r) => <span className="font-mono font-bold text-slate-900">{formatMoney(String(r.totalSpend))}</span>,
+      cell: (r) => <span className="font-mono font-bold text-slate-900">{formatMoney(r.totalSpend)}</span>,
       mobileRole: "status",
     },
   ];
@@ -137,15 +142,15 @@ export function SpendAnalyticsPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t("scm.spend.t.totalEvaluatedSpend")}</div>
-              <div className="mt-2 text-2xl font-black text-slate-900 font-mono">{formatMoney(String(totalSpend))}</div>
+              <div className="text-xs font-bold text-slate-500r">{t("scm.spend.t.totalEvaluatedSpend")}</div>
+              <div className="mt-2 text-2xl font-black text-slate-900 font-mono">{formatMoney(totalSpend)}</div>
             </Card>
             <Card>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t("scm.spend.t.purchaseOrdersAnalyzed")}</div>
+              <div className="text-xs font-bold text-slate-500r">{t("scm.spend.t.purchaseOrdersAnalyzed")}</div>
               <div className="mt-2 text-2xl font-black text-blue-600 font-mono">{totalPOs}</div>
             </Card>
             <Card>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t("scm.spend.t.itemsPurchasedVolume")}</div>
+              <div className="text-xs font-bold text-slate-500r">{t("scm.spend.t.itemsPurchasedVolume")}</div>
               <div className="mt-2 text-2xl font-black text-emerald-600 font-mono">{totalItems}</div>
             </Card>
           </div>

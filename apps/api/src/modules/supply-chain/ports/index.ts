@@ -22,5 +22,11 @@ export type {
 } from "./shared-master-data-read-port.js";
 export { PgSharedMasterDataReadPort } from "./shared-master-data.port.pg.js";
 
+export type {
+  ItemStockExposurePort,
+  ConflictingWarehouseStock,
+} from "./item-stock-exposure-port.js";
+export { PgItemStockExposurePort } from "./item-stock-exposure-port.js";
+
 export type { AccountingEventWritePort } from "./accounting-event-write-port.js";
 export { PgAccountingEventWritePort } from "./accounting-event.port.pg.js";

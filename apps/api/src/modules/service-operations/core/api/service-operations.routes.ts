@@ -47,6 +47,7 @@ const convertSchema = scheduleSchema.extend({ title: z.string().min(1).optional(
 const workOrderSchema = scheduleSchema.extend({
   customerId: z.string().uuid(),
   contractId: z.string().uuid().nullable().optional(),
+  woType: z.enum(["regular", "back_charge"]).optional(),
   projectId: z.string().uuid().nullable().optional(),
   siteId: z.string().uuid().nullable().optional(),
   serviceDefinitionCode: z.string().min(1),
@@ -98,6 +99,18 @@ const servingLogUpdateSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 const rateSchema = z.string().regex(/^0(\.\d{1,6})?$|^1(\.0{1,6})?$/);
+const invoiceStatusSchema = z.enum(["open", "settled", "cancelled"]);
+const listInvoicesQuerySchema = z
+  .object({
+    arStatus: invoiceStatusSchema.optional(),
+    status: invoiceStatusSchema.optional(),
+    customerId: z.string().uuid().optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    q: z.string().trim().min(1).max(100).optional(),
+  })
+  .transform(({ status, ...rest }) => ({ ...rest, arStatus: rest.arStatus ?? status }));
+
 const createInvoiceSchema = z.object({
   legalEntityId: z.string().uuid(),
   markupRate: rateSchema.optional(),
@@ -318,6 +331,11 @@ export function registerServiceOperationsRoutes(app: FastifyInstance, container:
     return reply.send(await svc().getInvoice(request.actor!, id));
   });
 
+  app.get("/customer-invoices", { preHandler: app.authenticate }, async (request, reply) => {
+    const query = listInvoicesQuerySchema.parse(request.query);
+    return reply.send({ items: await svc().listInvoices(request.actor!, query) });
+  });
+
   // --- Work Order Serving Log (SO-CORE-016) --------------------------------
 
   app.post("/work-orders/:id/serving", { preHandler: app.authenticate }, async (request, reply) => {
@@ -333,7 +351,8 @@ export function registerServiceOperationsRoutes(app: FastifyInstance, container:
 
   app.get("/work-orders/:id/serving", { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    return reply.send(await svc().getServingLog(request.actor!, id));
+    // Same envelope as POST/PATCH: { servingLog }, null when none is recorded yet.
+    return reply.send({ servingLog: await svc().getServingLog(request.actor!, id) });
   });
 
   app.patch("/work-orders/:id/serving", { preHandler: app.authenticate }, async (request, reply) => {

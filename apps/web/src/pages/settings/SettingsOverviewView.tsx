@@ -162,11 +162,11 @@ function OverviewBody({
         <h2 className="text-sm font-semibold text-ink">{t("adminConsole.tenantScopeTitle")}</h2>
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("adminConsole.workspace")}</dt>
+            <dt className="text-xs font-bold text-ink-faint">{t("adminConsole.workspace")}</dt>
             <dd className="mt-1 wrap-break-word text-ink-dim">{tenantName || t("adminConsole.currentTenant")}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("adminConsole.reportedScope")}</dt>
+            <dt className="text-xs font-bold text-ink-faint">{t("adminConsole.reportedScope")}</dt>
             <dd className="mt-1 text-ink-dim">{scopeLabels.length > 0 ? scopeLabels.join(" · ") : t("adminConsole.noScopeReported")}</dd>
           </div>
         </dl>

@@ -47,7 +47,7 @@ Open `http://localhost:5173/login` and use:
 |---|---|
 | Tenant code | `demo-gs` |
 | Email | `admin@demo.local` |
-| Password | `Admin12345!` |
+| Password | `admin123!` |
 
 Successful login redirects to `http://localhost:5173/` and displays **Welcome to Demo Enterprise Client**. The demo administrator is tenant-scoped and has the full-access role, so all capability-gated internal Core pages are available.
 

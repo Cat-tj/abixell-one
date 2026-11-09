@@ -234,7 +234,7 @@ export function ServicePacksPage() {
                 <p className="mt-1 text-xs text-slate-600">{def.description}</p>
 
                 <div className="mt-3">
-                  <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  <h5 className="text-xs font-semiboldr text-slate-500">
                     Template Checklist Items ({def.checklistItems.length})
                   </h5>
                   <ul className="mt-2 space-y-1.5 text-xs text-slate-700">

@@ -637,7 +637,7 @@ export function SharedServicesPanel({
             <p className="text-xs text-slate-500">{t("sharedServices.docServiceDesc")}</p>
           </div>
           {canManageDocuments && (
-            <Button disabled={!selectedInstance} onClick={(event) => openDialog({ kind: "upload" }, event.currentTarget)}>
+            <Button disabled={!selectedInstance} title={!selectedInstance ? t("sharedServices.selectInstance") : undefined} onClick={(event) => openDialog({ kind: "upload" }, event.currentTarget)}>
               {t("sharedServices.uploadDocument")}
             </Button>
           )}

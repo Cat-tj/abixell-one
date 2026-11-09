@@ -75,7 +75,7 @@ export function FinanceAccountsPage() {
     })();
   }, [token]);
 
-  async function run(action: () => Promise<unknown>, successMessage: string) {
+  async function run(action: () => Promise<unknown>, successMessage: string): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -83,8 +83,10 @@ export function FinanceAccountsPage() {
       await action();
       setNotice(successMessage);
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("fin.common.actionFailed"));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -174,22 +176,38 @@ export function FinanceAccountsPage() {
           </Field>
           <div className="flex items-end">
             <Button
-              disabled={busy || !code || !name || currency.length !== 3}
+              disabled={busy}
               onClick={async () => {
-                await run(
+                const missing = [
+                  !code.trim() ? t("fin.common.code") : null,
+                  !name.trim() ? t("fin.common.name") : null,
+                ].filter((x): x is string => x !== null);
+                if (missing.length > 0) {
+                  setNotice(null);
+                  setError(t("common.form.missing", { fields: missing.join(", ") }));
+                  return;
+                }
+                if (currency.trim().length !== 3) {
+                  setNotice(null);
+                  setError(t("common.form.invalid", { fields: t("fin.common.currency") }));
+                  return;
+                }
+                const ok = await run(
                   () =>
                     api.createFinanceAccount(token, {
-                      code,
-                      name,
+                      code: code.trim(),
+                      name: name.trim(),
                       accountType,
-                      currency,
+                      currency: currency.trim(),
                       legalEntityId: legalEntityId || null,
                       organizationUnitId: unitId || null,
                     }),
                   t("finAccounts.created", { code }),
                 );
-                setCode("");
-                setName("");
+                if (ok) {
+                  setCode("");
+                  setName("");
+                }
               }}
             >
               {t("fin.common.create")}

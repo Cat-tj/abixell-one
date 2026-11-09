@@ -121,7 +121,7 @@ export function AdminUsersView({
   const [terminatingId, setTerminatingId] = useState<string | null>(null);
 
   const terminateUser = useCallback(
-    async (user: AdminUserAccessSummary, triggerEl: HTMLElement) => {
+    async (user: AdminUserAccessSummary) => {
       if (!window.confirm(t("adminUsers.terminateConfirm", { name: user.fullName }))) return;
       setTerminatingId(user.id);
       try {
@@ -356,7 +356,8 @@ export function AdminUsersView({
                         className="min-h-[44px] text-status-danger"
                         aria-label={t("adminUsers.terminate")}
                         title={t("adminUsers.terminate")}
-                        onClick={(event) => void terminateUser(user, event.currentTarget)}
+                        disabled={terminatingId === user.id}
+                        onClick={() => void terminateUser(user)}
                       >
                         <UserX size={16} aria-hidden="true" />
                       </Button>
@@ -683,7 +684,15 @@ function RevokeAssignmentDialog({
     trimmedReason.length === 0 || trimmedReason.length > MAX_REVOKE_REASON_LENGTH;
 
   async function confirmRevocation() {
-    if (inFlight.current || reasonInvalid) return;
+    if (inFlight.current) return;
+    if (reasonInvalid) {
+      setError(
+        trimmedReason.length === 0
+          ? t("common.form.missing", { fields: t("adminUsers.reasonField") })
+          : t("common.form.invalid", { fields: t("adminUsers.reasonField") }),
+      );
+      return;
+    }
     inFlight.current = true;
     setPending(true);
     setError(null);
@@ -727,7 +736,7 @@ function RevokeAssignmentDialog({
           </Button>
           <Button
             className="min-h-[44px]"
-            disabled={pending || reasonInvalid}
+            disabled={pending}
             onClick={() => void confirmRevocation()}
           >
             {pending ? t("adminUsers.revoking") : t("adminUsers.confirmRevoke")}
@@ -760,7 +769,7 @@ function RevokeAssignmentDialog({
         <div>
           <label
             htmlFor="revoke-reason"
-            className="block text-xs font-semibold uppercase tracking-wide text-ink-dim"
+            className="block text-xs font-bold text-ink-dim"
           >
             {t("adminUsers.reasonField")}
           </label>
@@ -793,7 +802,7 @@ function RevokeAssignmentDialog({
 function SummaryItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-semibold uppercase tracking-wide text-ink-dim">{label}</dt>
+      <dt className="text-xs font-bold text-ink-dim">{label}</dt>
       <dd className="mt-1 wrap-break-word text-ink">{children}</dd>
     </div>
   );

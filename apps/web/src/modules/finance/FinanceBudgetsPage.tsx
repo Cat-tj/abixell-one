@@ -145,7 +145,28 @@ export function FinanceBudgetsPage() {
 
   const selectedBudget = budgets.find((b) => b.id === selectedId) ?? null;
 
+  function formError(kind: "missing" | "invalid", fields: Array<string | null>): boolean {
+    const list = fields.filter((x): x is string => x !== null);
+    if (list.length === 0) return false;
+    setNotice(null);
+    setError(t(kind === "missing" ? "common.form.missing" : "common.form.invalid", { fields: list.join(", ") }));
+    return true;
+  }
+
+  // A comma is accepted as the decimal separator ("12,5" -> "12.5").
+  const decimal = (v: string) => v.trim().replace(",", ".");
+
   async function createBudget() {
+    if (
+      formError("missing", [
+        !legalEntityId ? t("fin.common.legalEntity") : null,
+        fiscalYearCode.trim() === "" ? t("finBudget.fiscalYear") : null,
+        !name.trim() ? t("fin.common.name") : null,
+        currency.trim() === "" ? t("fin.common.currency") : null,
+      ])
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -170,16 +191,38 @@ export function FinanceBudgetsPage() {
 
   async function createVersion() {
     if (!selectedBudget) return;
+    if (
+      formError("missing", [
+        totalAmount.trim() === "" ? t("finBudget.totalAmount") : null,
+        !weights.some((w) => w.periodCode.trim() && w.weight.trim())
+          ? t("finBudget.periodWeights")
+          : null,
+      ])
+    ) {
+      return;
+    }
+    if (
+      formError("invalid", [
+        !isValidAmount4Input(decimal(totalAmount)) ? t("finBudget.totalAmount") : null,
+        weights.some(
+          (w) => (w.periodCode.trim() || w.weight.trim()) && !(w.periodCode.trim() && isValidAmount4Input(decimal(w.weight))),
+        )
+          ? t("finBudget.periodWeights")
+          : null,
+      ])
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const created = await api.accountingCreateBudgetVersion(token, selectedBudget.id, {
         // Verbatim text at 4 decimals, both the total and every weight.
-        totalAmount: totalAmount.trim(),
+        totalAmount: decimal(totalAmount),
         weights: weights
-          .filter((w) => w.periodCode.trim() && isValidAmount4Input(w.weight))
-          .map((w) => ({ periodCode: w.periodCode.trim(), weight: w.weight.trim() })),
+          .filter((w) => w.periodCode.trim() && isValidAmount4Input(decimal(w.weight)))
+          .map((w) => ({ periodCode: w.periodCode.trim(), weight: decimal(w.weight) })),
         note: note.trim() || null,
       });
       setNotice(t("finBudget.versionDrafted", { version: created.versionNumber }));
@@ -218,6 +261,17 @@ export function FinanceBudgetsPage() {
 
   async function consume() {
     if (!selectedBudget) return;
+    if (
+      formError("missing", [
+        consumePeriod.trim() === "" ? t("finBudget.period") : null,
+        consumeAmount.trim() === "" ? t("fin.common.amount") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formError("invalid", [!isValidAmount4Input(decimal(consumeAmount)) ? t("fin.common.amount") : null])) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -225,7 +279,7 @@ export function FinanceBudgetsPage() {
       const result = await api.accountingConsumeBudget(token, {
         budgetId: selectedBudget.id,
         periodCode: consumePeriod.trim(),
-        amount: consumeAmount.trim(),
+        amount: decimal(consumeAmount),
         kind: consumeKind,
         idempotencyKey: newIdempotencyKey(),
         note: consumeNote.trim() || null,
@@ -304,7 +358,7 @@ export function FinanceBudgetsPage() {
             </Select>
           </Field>
           <Field label={t("finBudget.fiscalYear")} required>
-            <Input value={fiscalYearCode} onChange={(e) => setFiscalYearCode(e.target.value)} placeholder="2026" />
+            <Input value={fiscalYearCode} onChange={(e) => setFiscalYearCode(e.target.value)} placeholder={t("common.form.example", { value: "2026" })} />
           </Field>
           <Field label={t("finBudget.scenario")} required>
             <Select value={scenario} onChange={(e) => setScenario(e.target.value as typeof scenario)}>
@@ -326,7 +380,7 @@ export function FinanceBudgetsPage() {
         </div>
         <div className="mt-3">
           <Button
-            disabled={busy || !legalEntityId || !name.trim() || fiscalYearCode.trim() === ""}
+            disabled={busy}
             onClick={() => void createBudget()}
           >
             {t("finBudget.createBudget")}
@@ -368,14 +422,14 @@ export function FinanceBudgetsPage() {
                   <Field
                     label={t("finBudget.totalAmount")}
                     required
-                    hint={totalAmount && !isValidAmount4Input(totalAmount) ? t("finBudget.amountHint") : undefined}
+                    hint={totalAmount && !isValidAmount4Input(decimal(totalAmount)) ? t("finBudget.amountHint") : undefined}
                   >
                     <Input
                       inputMode="decimal"
                       value={totalAmount}
                       onChange={(e) => setTotalAmount(e.target.value)}
-                      placeholder="1200000000.0000"
-                      aria-invalid={totalAmount !== "" && !isValidAmount4Input(totalAmount)}
+                      placeholder={t("common.form.example", { value: "1200000000.0000" })}
+                      aria-invalid={totalAmount !== "" && !isValidAmount4Input(decimal(totalAmount))}
                     />
                   </Field>
                   <Field label={t("finBudget.note")}>
@@ -394,7 +448,7 @@ export function FinanceBudgetsPage() {
                       <div className="sm:col-span-4">
                         <Input
                           aria-label={t("finBudget.periodCodeFor", { n: index + 1 })}
-                          placeholder="2026-01"
+                          placeholder={t("common.form.example", { value: "2026-01" })}
                           value={weight.periodCode}
                           onChange={(e) =>
                             setWeights((current) =>
@@ -407,7 +461,7 @@ export function FinanceBudgetsPage() {
                         <Input
                           aria-label={t("finBudget.weightFor", { n: index + 1 })}
                           inputMode="decimal"
-                          placeholder="1.0000"
+                          placeholder={t("common.form.example", { value: "1.0000" })}
                           value={weight.weight}
                           onChange={(e) =>
                             setWeights((current) =>
@@ -424,11 +478,7 @@ export function FinanceBudgetsPage() {
                     {t("finBudget.addPeriod")}
                   </Button>
                   <Button
-                    disabled={
-                      busy ||
-                      !isValidAmount4Input(totalAmount) ||
-                      !weights.some((w) => w.periodCode.trim() && isValidAmount4Input(w.weight))
-                    }
+                    disabled={busy}
                     onClick={() => void createVersion()}
                   >
                     {t("finBudget.draftVersion")}
@@ -455,7 +505,7 @@ export function FinanceBudgetsPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-faint">
+                        <tr className="border-b border-line text-left text-xs text-ink-faint">
                           <th className="py-2 pr-3">{t("finBudget.period")}</th>
                           <th className="py-2 pr-3 text-right">{t("finBudget.baseline")}</th>
                           <th className="py-2 pr-3 text-right">{t("finBudget.actual")}</th>
@@ -499,7 +549,7 @@ export function FinanceBudgetsPage() {
                     <Input
                       value={consumePeriod}
                       onChange={(e) => setConsumePeriod(e.target.value)}
-                      placeholder="2026-01"
+                      placeholder={t("common.form.example", { value: "2026-01" })}
                     />
                   </Field>
                   <Field label={t("finBudget.kind")} required>
@@ -514,14 +564,14 @@ export function FinanceBudgetsPage() {
                   <Field
                     label={t("fin.common.amount")}
                     required
-                    hint={consumeAmount && !isValidAmount4Input(consumeAmount) ? t("finBudget.amountHint") : undefined}
+                    hint={consumeAmount && !isValidAmount4Input(decimal(consumeAmount)) ? t("finBudget.amountHint") : undefined}
                   >
                     <Input
                       inputMode="decimal"
                       value={consumeAmount}
                       onChange={(e) => setConsumeAmount(e.target.value)}
-                      placeholder="2500000.0000"
-                      aria-invalid={consumeAmount !== "" && !isValidAmount4Input(consumeAmount)}
+                      placeholder={t("common.form.example", { value: "2500000.0000" })}
+                      aria-invalid={consumeAmount !== "" && !isValidAmount4Input(decimal(consumeAmount))}
                     />
                   </Field>
                   <Field label={t("finBudget.note")}>
@@ -530,7 +580,7 @@ export function FinanceBudgetsPage() {
                 </div>
                 <div className="mt-3">
                   <Button
-                    disabled={busy || !activeVersion || consumePeriod.trim() === "" || !isValidAmount4Input(consumeAmount)}
+                    disabled={busy || !activeVersion}
                     onClick={() => void consume()}
                   >
                     {t("finBudget.record")}

@@ -82,7 +82,7 @@ npm run dev:api         # http://localhost:4000
 npm run dev:web         # http://localhost:5173
 ```
 
-Demo login (after `npm run seed`): `admin@demo.local` / `Admin12345!`
+Demo login (after `npm run seed`): `admin@demo.local` / `admin123!`
 (tenant-wide) or `supervisor@demo.local` / `Supervisor12345!` (Site A scope
 only, read-only), Tenant code `demo-gs`.
 

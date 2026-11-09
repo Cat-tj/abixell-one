@@ -11,6 +11,7 @@ import { useAuth } from "../../auth/AuthContext";
 import {
   api,
   ApiError,
+  type ScmGrade,
   type ScmItem,
   type StockBalanceRecord,
   type StockMovementRecord,
@@ -25,11 +26,13 @@ import {
   Field,
   Input,
   PageHeader,
+  Select,
   Spinner,
   StatusPill,
   type Column,
 } from "../../shell/components/ui";
 import { formatDate } from "../../shared/format";
+import { GradeBadge, GradeOptions, parseGrade } from "../../shared/GradeBadge";
 
 export function ItemsPage() {
   const t = useT();
@@ -49,6 +52,7 @@ export function ItemsPage() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [uom, setUom] = useState("EA");
+  const [grade, setGrade] = useState<ScmGrade | null>(null);
   const [quantity, setQuantity] = useState("");
   const [reference, setReference] = useState("");
 
@@ -86,7 +90,24 @@ export function ItemsPage() {
     [token, t],
   );
 
-  async function run(action: () => Promise<unknown>, successMessage: string) {
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+
+  async function run(action: () => Promise<unknown>, successMessage: string): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -95,11 +116,20 @@ export function ItemsPage() {
       setNotice(successMessage);
       await load();
       if (selected) await openItem(selected);
+      return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("msc.items.msg.actionFailed"));
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  function qtyOk(): boolean {
+    return formOk(
+      [quantity.trim() ? null : t("msc.items.f.quantity")],
+      [quantity.trim() && !(num(quantity) > 0) ? t("msc.items.f.quantity") : null],
+    );
   }
 
   /** Total across every stock location for this item. */
@@ -111,6 +141,7 @@ export function ItemsPage() {
     { header: t("msc.items.h.code"), cell: (row) => <span className="font-medium">{row.code}</span> },
     { header: t("msc.items.h.name"), cell: (row) => row.name },
     { header: t("msc.items.h.unit"), cell: (row) => row.unitOfMeasure },
+    { header: t("grade.label"), cell: (row) => <GradeBadge grade={row.grade} /> },
     { header: t("msc.items.h.onHand"), cell: (row) => <Badge>{totalFor(row)}</Badge> },
     {
       header: t("msc.items.h.state"),
@@ -139,19 +170,35 @@ export function ItemsPage() {
           <Field label={t("msc.items.f.unitOfMeasure")} required>
             <Input value={uom} onChange={(e) => setUom(e.target.value)} placeholder="EA / KG / L / BOX" />
           </Field>
+          <Field label={t("grade.label")}>
+            <Select value={grade ?? ""} onChange={(e) => setGrade(parseGrade(e.target.value))}>
+              <GradeOptions />
+            </Select>
+          </Field>
           <div className="flex items-end">
             <Button
-              disabled={busy || !code || !name || !uom}
+              disabled={busy}
               onClick={async () => {
-                await run(
-                  () => api.createScmItem(token, { code, name, unitOfMeasure: uom }),
+                if (
+                  !formOk([
+                    code.trim() ? null : t("msc.items.f.code"),
+                    name.trim() ? null : t("msc.items.f.name"),
+                    uom.trim() ? null : t("msc.items.f.unitOfMeasure"),
+                  ])
+                )
+                  return;
+                const ok = await run(
+                  () =>
+                    api.createScmItem(token, { code: code.trim(), name: name.trim(), unitOfMeasure: uom.trim(), grade }),
                   "Item created.",
                 );
-                setCode("");
-                setName("");
+                if (ok) {
+                  setCode("");
+                  setName("");
+                }
               }}
             >
-              Create
+              {t("common.create")}
             </Button>
           </div>
         </div>
@@ -196,36 +243,38 @@ export function ItemsPage() {
               </Field>
               <div className="flex items-end gap-2">
                 <Button
-                  disabled={busy || !quantity}
+                  disabled={busy}
                   onClick={async () => {
-                    await run(
+                    if (!qtyOk()) return;
+                    const ok = await run(
                       () =>
                         api.recordGoodsIn(token, {
                           itemCode: selected.code,
-                          quantity: Number(quantity),
+                          quantity: num(quantity),
                           reference: reference || null,
                         }),
                       "Goods received.",
                     );
-                    setQuantity("");
+                    if (ok) setQuantity("");
                   }}
                 >
                   Receive
                 </Button>
                 <Button
                   variant="secondary"
-                  disabled={busy || !quantity}
+                  disabled={busy}
                   onClick={async () => {
-                    await run(
+                    if (!qtyOk()) return;
+                    const ok = await run(
                       () =>
                         api.recordGoodsOut(token, {
                           itemCode: selected.code,
-                          quantity: Number(quantity),
+                          quantity: num(quantity),
                           reference: reference || null,
                         }),
                       "Goods issued.",
                     );
-                    setQuantity("");
+                    if (ok) setQuantity("");
                   }}
                 >
                   Issue

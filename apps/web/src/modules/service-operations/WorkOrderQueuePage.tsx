@@ -15,6 +15,7 @@ import {
   ApiError,
   type Customer,
   type ServiceDefinition,
+  type WorkOrderType,
   type WorkOrderRow,
 } from "../../lib/api";
 import {
@@ -30,9 +31,11 @@ import {
   Select,
   Spinner,
   StatusPill,
+  Textarea,
   type Column,
 } from "../../shell/components/ui";
 import { dueIndicator, formatDateShort, statusTone } from "../../shared/format";
+import { isFinished, sortWorkOrders } from "./workOrderListing";
 
 export function WorkOrderQueuePage() {
   const t = useT();
@@ -52,6 +55,10 @@ export function WorkOrderQueuePage() {
   const [serviceCode, setServiceCode] = useState("");
   const [title, setTitle] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [woType, setWoType] = useState<WorkOrderType>("regular");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("");
+  const [view, setView] = useState<"active" | "finished" | "all">("active");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,7 +69,7 @@ export function WorkOrderQueuePage() {
         api.customers(token).catch(() => [] as Customer[]),
         api.serviceDefinitions(token).catch(() => [] as ServiceDefinition[]),
       ]);
-      setRows(orders);
+      setRows(sortWorkOrders(orders));
       setCustomers(customerList);
       setServiceTypes(definitions.filter((d) => d.isActive));
     } catch (err) {
@@ -73,6 +80,16 @@ export function WorkOrderQueuePage() {
   }, [token, t]);
 
   async function createWorkOrder() {
+    const missing = [
+      customerId ? null : t("mo.woq.f.customer"),
+      serviceCode ? null : t("mo.woq.f.serviceType"),
+      title.trim() ? null : t("mo.woq.f.title"),
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -80,11 +97,18 @@ export function WorkOrderQueuePage() {
       await api.createWorkOrder(token, {
         customerId,
         serviceDefinitionCode: serviceCode,
-        title,
+        title: title.trim(),
+        description: description.trim() || null,
+        priority: priority || null,
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+        // Back-charge WOs never carry a contractId; the form has no contract
+        // field, so it is simply omitted from the payload.
+        woType,
       });
       setNotice(t("mo.woq.msg.workOrderCreated"));
       setTitle("");
+      setDescription("");
+      setPriority("");
       setDueAt("");
       await load();
     } catch (err) {
@@ -103,7 +127,15 @@ export function WorkOrderQueuePage() {
       header: t("mo.woq.h.number"),
       cell: (row) => <span className="font-medium">{row.workOrder.workOrderNumber}</span>,
     },
-    { header: t("mo.woq.h.work"), cell: (row) => row.workOrder.title },
+    {
+      header: t("mo.woq.h.work"),
+      cell: (row) => (
+        <span className="flex flex-wrap items-center gap-2">
+          {row.workOrder.title}
+          {row.workOrder.woType === "back_charge" ? <Badge>{t("wo.type.backCharge")}</Badge> : null}
+        </span>
+      ),
+    },
     {
       header: t("mo.woq.h.status"),
       cell: (row) => (
@@ -114,12 +146,13 @@ export function WorkOrderQueuePage() {
     },
     {
       header: t("mo.woq.h.assignment"),
-      cell: (row) => <Badge>{row.workOrder.assignedToUserId ? "Assigned" : "Unassigned"}</Badge>,
+      cell: (row) => <Badge>{row.workOrder.assignedToUserId ? t("mo.woq.assigned") : t("mo.woq.unassigned")}</Badge>,
     },
     {
       header: t("mo.woq.h.due"),
       cell: (row) => {
-        const indicator = dueIndicator(row.workOrder.dueAt);
+        // A finished job is not "late" any more — only open work gets a due flag.
+        const indicator = isFinished(row) ? null : dueIndicator(row.workOrder.dueAt);
         return (
           <span className="flex flex-wrap items-center gap-2">
             {formatDateShort(row.workOrder.dueAt)}
@@ -140,7 +173,7 @@ export function WorkOrderQueuePage() {
       {notice ? <Alert tone="success">{notice}</Alert> : null}
 
       <Card className="mb-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("mo.woq.t.createWorkOrder")}</h2>
+        <h2 className="mb-3 text-base font-extrabold text-ink">{t("mo.woq.t.createWorkOrder")}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label={t("mo.woq.f.customer")} required>
             <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
@@ -162,15 +195,41 @@ export function WorkOrderQueuePage() {
               ))}
             </Select>
           </Field>
+          <Field label={t("wo.type.label")}>
+            <Select value={woType} onChange={(e) => setWoType(e.target.value as WorkOrderType)}>
+              <option value="regular">{t("wo.type.regular")}</option>
+              <option value="back_charge">{t("wo.type.backCharge")}</option>
+            </Select>
+          </Field>
           <Field label={t("mo.woq.f.title")} required>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("mo.woq.p.whatNeedsDoing")} />
           </Field>
+          <Field label={t("mo.wod.f.priority")}>
+            <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="">{t("mo.woq.t.select")}</option>
+              {(["low", "medium", "high", "critical"] as const).map((p) => (
+                <option key={p} value={p}>
+                  {t(`mo.woq.priority.${p}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="sm:col-span-2 lg:col-span-4">
+            <Field label={t("mo.wod.f.description")}>
+              <Textarea
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t("mo.woq.p.descriptionHint")}
+              />
+            </Field>
+          </div>
           <div className="flex items-end gap-3">
             <Field label={t("mo.woq.f.due")}>
               <Input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
             </Field>
-            <Button disabled={busy || !customerId || !serviceCode || !title} onClick={() => void createWorkOrder()}>
-              Create
+            <Button disabled={busy} onClick={() => void createWorkOrder()}>
+              {t("mo.woq.b.create")}
             </Button>
           </div>
         </div>
@@ -179,9 +238,20 @@ export function WorkOrderQueuePage() {
       {loading ? (
         <Spinner />
       ) : (
+        <>
+        <div className="mb-3 mt-6 flex flex-wrap items-center gap-2" role="tablist">
+          {(["active", "finished", "all"] as const).map((v) => {
+            const count = v === "all" ? rows.length : rows.filter((r) => (v === "finished") === isFinished(r)).length;
+            return (
+              <Button key={v} variant={view === v ? "primary" : "secondary"} onClick={() => setView(v)}>
+                {t(`mo.woq.view.${v}`)} ({count})
+              </Button>
+            );
+          })}
+        </div>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={view === "all" ? rows : rows.filter((r) => (view === "finished") === isFinished(r))}
           keyOf={(row) => row.workOrder.id}
           onRowClick={(row) => navigate(`/work-orders/${row.workOrder.id}`)}
           empty={
@@ -191,6 +261,7 @@ export function WorkOrderQueuePage() {
             />
           }
         />
+        </>
       )}
     </div>
   );

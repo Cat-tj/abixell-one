@@ -34,6 +34,7 @@ import {
 } from "../../shell/components/ui";
 import { formatDateShort } from "../../shared/format";
 import { ReceivingQualityPanel } from "./ReceivingQualityPanel";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 function label(v: string) {
   return v.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -91,7 +92,7 @@ export function StockOperationsPage() {
 
   // Form states - Opname
   const [opWhId, setOpWhId] = useState("");
-  const [opDate, setOpDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [opDate, setOpDate] = useState(() => localDateInputValue());
   const [opNotes, setOpNotes] = useState("");
 
   const loadData = useCallback(async () => {

@@ -883,16 +883,16 @@ function PermissionPicker({
           <table className="min-w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-line-strong">
-                <th scope="col" className="w-10 px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="w-10 px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   <span className="sr-only">{t("roleDef.permColGrant")}</span>
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   {t("roleDef.permColPermission")}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   {t("roleDef.permColModule")}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   {t("roleDef.permColAvailability")}
                 </th>
               </tr>
@@ -1147,19 +1147,19 @@ function WindowPicker({
           <table className="min-w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-line-strong">
-                <th scope="col" className="w-10 px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="w-10 px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   <span className="sr-only">{t("roleDef.winColInclude")}</span>
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   {t("roleDef.winColWindow")}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   {t("roleDef.winColRequired")}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   {t("roleDef.winColWrite")}
                 </th>
-                <th scope="col" className="px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                <th scope="col" className="px-3 py-2 text-left text-[0.84rem] font-bold text-ink-faint">
                   {t("roleDef.winColActive")}
                 </th>
               </tr>

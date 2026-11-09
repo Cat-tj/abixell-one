@@ -141,13 +141,22 @@ export function HseDetailPage() {
   const userLabel = (id: string | null) =>
     users.find((u) => u.id === id)?.fullName ?? t("hse.common.notAvailable");
 
+  function missingField(label: string): void {
+    setError(t("common.form.missing", { fields: label }));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function saveEdits() {
     if (!recordId) return;
+    if (!editTitle.trim()) {
+      missingField(t("hse.common.title"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const updated = await api.updateHseRecord(token, recordId, {
-        title: editTitle,
+        title: editTitle.trim(),
         summary: editSummary || null,
         description: editDescription || null,
         categoryCode: editCategory || null,
@@ -164,11 +173,16 @@ export function HseDetailPage() {
   }
 
   async function addPerson() {
-    if (!recordId || !addPersonName) return;
+    if (!recordId) return;
+    if (!addPersonName.trim()) {
+      missingField(t("hse.detail.name"));
+      return;
+    }
     setBusy(true);
+    setError(null);
     try {
       await api.addHsePersonInvolved(token, recordId, {
-        personName: addPersonName,
+        personName: addPersonName.trim(),
         personRole: addPersonRole || null,
       });
       setAddPersonName("");
@@ -182,11 +196,16 @@ export function HseDetailPage() {
   }
 
   async function createFollowUp() {
-    if (!recordId || !followUpTitle) return;
+    if (!recordId) return;
+    if (!followUpTitle.trim()) {
+      missingField(t("hse.common.title"));
+      return;
+    }
     setBusy(true);
+    setError(null);
     try {
       await api.createHseFollowUp(token, recordId, {
-        title: followUpTitle,
+        title: followUpTitle.trim(),
         description: followUpDescription || null,
         dueDate: followUpDueDate || null,
       });
@@ -378,7 +397,7 @@ export function HseDetailPage() {
                   </Select>
                 </Field>
                 <div className="flex gap-2">
-                  <Button disabled={busy || !editTitle} onClick={() => void saveEdits()}>
+                  <Button disabled={busy} onClick={() => void saveEdits()}>
                     {t("common.save")}
                   </Button>
                   <Button variant="secondary" onClick={() => setEditMode(false)} disabled={busy}>
@@ -445,7 +464,7 @@ export function HseDetailPage() {
                     />
                   </Field>
                 </div>
-                <Button onClick={() => void addPerson()} disabled={busy || !addPersonName} className="mt-2">
+                <Button onClick={() => void addPerson()} disabled={busy} className="mt-2">
                   {t("hse.detail.addPerson")}
                 </Button>
               </div>
@@ -584,7 +603,7 @@ export function HseDetailPage() {
                   disabled={busy}
                 />
               </Field>
-              <Button disabled={busy || !followUpTitle} onClick={() => void createFollowUp()}>
+              <Button disabled={busy} onClick={() => void createFollowUp()}>
                 {t("hse.detail.createFollowUpButton")}
               </Button>
             </div>

@@ -38,6 +38,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDateShort, statusTone } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 const MAINTENANCE_TYPES: MaintenanceType[] = ["preventive", "corrective", "emergency"];
 const PRIORITIES: MaintenancePriority[] = ["low", "medium", "high", "critical"];
@@ -76,7 +77,7 @@ export function AssetMaintenancePage() {
 
   const [assetFilter, setAssetFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOfDate, setAsOfDate] = useState(() => localDateInputValue());
 
   const [scheduleAssetId, setScheduleAssetId] = useState("");
   const [scheduleCode, setScheduleCode] = useState("");
@@ -138,8 +139,44 @@ export function AssetMaintenancePage() {
     (schedule) => !woAssetId || schedule.assetId === woAssetId,
   );
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+  const badNum = (v: string) => v.trim() !== "" && Number.isNaN(num(v));
+
   async function createSchedule() {
     if (!canManage) return;
+    const days = Number(intervalDays.replace(/\D/g, ""));
+    if (
+      !formOk(
+        [
+          scheduleAssetId ? null : t("sca.maint.f.asset"),
+          scheduleCode.trim() ? null : t("sca.maint.f.scheduleCode"),
+          scheduleTitle.trim() ? null : t("sca.maint.f.title"),
+          frequencyType === "calendar" && intervalDays.trim() === "" ? t("sca.maint.f.intervalDays") : null,
+          frequencyType === "meter" && meterInterval.trim() === "" ? t("sca.maint.f.meterInterval") : null,
+        ],
+        [
+          frequencyType === "calendar" && intervalDays.trim() !== "" && !(days >= 1) ? t("sca.maint.f.intervalDays") : null,
+          frequencyType === "meter" && meterInterval.trim() !== "" && !(num(meterInterval) > 0) ? t("sca.maint.f.meterInterval") : null,
+          badNum(nextDueMeter) ? t("sca.maint.f.nextDueMeter") : null,
+        ],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -150,11 +187,11 @@ export function AssetMaintenancePage() {
         title: scheduleTitle,
         description: scheduleDescription || null,
         frequencyType,
-        intervalDays: frequencyType === "calendar" ? Number(intervalDays) : null,
-        meterInterval: frequencyType === "meter" ? Number(meterInterval) : null,
+        intervalDays: frequencyType === "calendar" ? days : null,
+        meterInterval: frequencyType === "meter" ? num(meterInterval) : null,
         meterType: frequencyType === "meter" ? meterType : null,
         nextDueDate: nextDueDate || null,
-        nextDueMeter: nextDueMeter ? Number(nextDueMeter) : null,
+        nextDueMeter: nextDueMeter.trim() ? num(nextDueMeter) : null,
       });
       setNotice(`Maintenance schedule ${created.scheduleCode} created.`);
       setScheduleCode("");
@@ -172,6 +209,13 @@ export function AssetMaintenancePage() {
 
   async function createWorkOrder() {
     if (!canManage) return;
+    if (
+      !formOk(
+        [woAssetId ? null : t("sca.maint.f.asset"), woTitle.trim() ? null : t("sca.maint.f.title")],
+        [badNum(costEstimate) ? t("sca.maint.f.costEstimate") : null],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -183,7 +227,7 @@ export function AssetMaintenancePage() {
         priority: woPriority,
         title: woTitle,
         description: woDescription || null,
-        costEstimate: costEstimate ? Number(costEstimate) : null,
+        costEstimate: costEstimate.trim() ? num(costEstimate) : null,
       });
       setNotice(`Maintenance work order ${created.orderNumber} created.`);
       setWoTitle("");
@@ -357,7 +401,7 @@ export function AssetMaintenancePage() {
             </div>
             <div className="mt-3">
               <Button
-                disabled={busy || !scheduleAssetId || !scheduleCode || !scheduleTitle || (frequencyType === "calendar" && !intervalDays) || (frequencyType === "meter" && !meterInterval)}
+                disabled={busy}
                 onClick={() => void createSchedule()}
               >
                 Create Schedule
@@ -407,7 +451,7 @@ export function AssetMaintenancePage() {
               </div>
             </div>
             <div className="mt-3">
-              <Button disabled={busy || !woAssetId || !woTitle} onClick={() => void createWorkOrder()}>
+              <Button disabled={busy} onClick={() => void createWorkOrder()}>
                 Create Work Order
               </Button>
             </div>

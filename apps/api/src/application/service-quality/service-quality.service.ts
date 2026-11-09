@@ -686,7 +686,7 @@ export class ServiceQualityService {
       actor,
       SERVICE_QUALITY_CAPA_MANAGE_PERMISSION,
     );
-    const complaint = await this.getComplaintForPermission(
+    const { complaint, customer } = await this.getComplaintAndCustomerForPermission(
       actor,
       input.complaintId,
       SERVICE_QUALITY_CAPA_MANAGE_PERMISSION,
@@ -721,6 +721,10 @@ export class ServiceQualityService {
         contextData: {
           complaintId: complaint.id,
           customerId: complaint.customerId,
+          // ADR-0012: the owning unit follows the parent (Complaint -> Customer),
+          // exactly as the Complaint's own Instance does, so org-unit-scoped
+          // managers keep seeing the CAPA task.
+          organizationUnitId: customer.ownerOrganizationUnitId,
           actionNumber,
         },
       });
@@ -1245,14 +1249,23 @@ export class ServiceQualityService {
     complaintId: string,
     permissionCode: string,
   ) {
+    return (await this.getComplaintAndCustomerForPermission(actor, complaintId, permissionCode))
+      .complaint;
+  }
+
+  private async getComplaintAndCustomerForPermission(
+    actor: ActorContext,
+    complaintId: string,
+    permissionCode: string,
+  ) {
     const complaint = await this.complaints.getForTrustedCaller(actor.tenantId, complaintId);
     if (!complaint) throw new NotFoundError("Complaint", complaintId);
-    await this.customers.getAuthorizedForPermission(
+    const customer = await this.customers.getAuthorizedForPermission(
       actor,
       complaint.customerId,
       permissionCode,
     );
-    return complaint;
+    return { complaint, customer };
   }
 
   private projectSlaState(target: SlaTarget | null, now: Date) {

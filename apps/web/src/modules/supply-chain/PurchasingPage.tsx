@@ -113,7 +113,24 @@ export function PurchasingPage() {
     [token, t],
   );
 
-  async function run(action: () => Promise<unknown>, successMessage: string) {
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+
+  async function run(action: () => Promise<unknown>, successMessage: string): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -123,8 +140,10 @@ export function PurchasingPage() {
       await load();
       if (requestDetail) await openRequest(requestDetail.request.id);
       if (orderDetail) await openOrder(orderDetail.order.id);
+      return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("msc.purch.msg.actionFailed"));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -190,21 +209,34 @@ export function PurchasingPage() {
           </Field>
           <div className="flex items-end">
             <Button
-              disabled={busy || !prItem || !prQuantity || !justification}
+              disabled={busy}
               onClick={async () => {
-                await run(
+                if (
+                  !formOk(
+                    [
+                      prItem ? null : t("msc.purch.f.item"),
+                      prQuantity.trim() ? null : t("msc.purch.f.quantity"),
+                      justification.trim() ? null : t("msc.purch.f.justification"),
+                    ],
+                    [prQuantity.trim() && !(num(prQuantity) > 0) ? t("msc.purch.f.quantity") : null],
+                  )
+                )
+                  return;
+                const ok = await run(
                   () =>
                     api.createPurchaseRequest(token, {
-                      justification,
-                      lines: [{ itemCode: prItem, quantity: Number(prQuantity) }],
+                      justification: justification.trim(),
+                      lines: [{ itemCode: prItem, quantity: num(prQuantity) }],
                     }),
                   "Purchase request created.",
                 );
-                setJustification("");
-                setPrQuantity("");
+                if (ok) {
+                  setJustification("");
+                  setPrQuantity("");
+                }
               }}
             >
-              Create
+              {t("common.create")}
             </Button>
           </div>
         </div>
@@ -290,17 +322,18 @@ export function PurchasingPage() {
               </Field>
               <div className="flex items-end">
                 <Button
-                  disabled={busy || !supplierCode}
-                  onClick={() =>
-                    run(
+                  disabled={busy}
+                  onClick={() => {
+                    if (!formOk([supplierCode ? null : t("msc.purch.f.supplier")])) return;
+                    void run(
                       () =>
                         api.createPurchaseOrder(token, {
                           supplierCode,
                           purchaseRequestId: requestDetail.request.id,
                         }),
                       "Purchase order created.",
-                    )
-                  }
+                    );
+                  }}
                 >
                   Create purchase order
                 </Button>
@@ -356,17 +389,27 @@ export function PurchasingPage() {
               </Field>
               <div className="flex items-end">
                 <Button
-                  disabled={busy || !receiptLineId || !receiptQuantity}
+                  disabled={busy}
                   onClick={async () => {
-                    await run(
+                    if (
+                      !formOk(
+                        [
+                          receiptLineId ? null : t("msc.purch.f.line"),
+                          receiptQuantity.trim() ? null : t("msc.purch.f.quantityReceived"),
+                        ],
+                        [receiptQuantity.trim() && !(num(receiptQuantity) > 0) ? t("msc.purch.f.quantityReceived") : null],
+                      )
+                    )
+                      return;
+                    const ok = await run(
                       () =>
                         api.receiveAgainstOrder(token, orderDetail.order.id, {
                           lineId: receiptLineId,
-                          quantity: Number(receiptQuantity),
+                          quantity: num(receiptQuantity),
                         }),
                       "Goods received against the order.",
                     );
-                    setReceiptQuantity("");
+                    if (ok) setReceiptQuantity("");
                   }}
                 >
                   Record receipt

@@ -6,6 +6,7 @@ import { useAuth } from "../../auth/AuthContext";
 import {
   api,
   ApiError,
+  type ScmGrade,
   type ScmItem,
   type ScmItemBatch,
   type ScmItemSerial,
@@ -32,7 +33,8 @@ import {
   StatusPill,
   type Column,
 } from "../../shell/components/ui";
-import { formatDateShort } from "../../shared/format";
+import { formatDateShort, formatMoney } from "../../shared/format";
+import { GradeBadge, GradeOptions, parseGrade } from "../../shared/GradeBadge";
 
 const MOVEMENT_TYPES: ScmAdvancedStockMovementType[] = [
   "in",
@@ -75,6 +77,7 @@ export function WarehousesPage() {
   const [whCode, setWhCode] = useState("");
   const [whName, setWhName] = useState("");
   const [whAddress, setWhAddress] = useState("");
+  const [whGrade, setWhGrade] = useState<ScmGrade | null>(null);
 
   // Form states - Location
   const [locWhId, setLocWhId] = useState("");
@@ -160,6 +163,7 @@ export function WarehousesPage() {
         name: whName.trim(),
         siteId: null,
         address: whAddress.trim() || null,
+        grade: whGrade,
       });
       setNotice(`Warehouse ${whCode} created.`);
       setWhCode("");
@@ -292,6 +296,7 @@ export function WarehousesPage() {
     },
     { header: t("scm.wh.h.name"), cell: (r) => r.name },
     { header: t("scm.wh.h.address"), cell: (r) => r.address || "—" },
+    { header: t("grade.label"), cell: (r) => <GradeBadge grade={r.grade} /> },
     {
       header: t("scm.wh.h.status"),
       cell: (r) => <StatusPill tone={r.isActive ? "success" : "neutral"}>{r.isActive ? "Active" : "Inactive"}</StatusPill>,
@@ -376,7 +381,7 @@ export function WarehousesPage() {
     },
     { header: t("scm.wh.h.warehouse"), cell: (r) => whMap.get(r.warehouseId)?.name || r.warehouseId },
     { header: t("scm.wh.h.quantity"), cell: (r) => <span className="font-mono font-bold">{r.quantity}</span> },
-    { header: t("scm.wh.h.totalCost"), cell: (r) => r.totalCost != null ? `$${r.totalCost.toFixed(2)}` : "—" },
+    { header: t("scm.wh.h.totalCost"), cell: (r) => formatMoney(r.totalCost) },
     { header: t("scm.wh.h.notes"), cell: (r) => r.notes || "—" },
   ];
 
@@ -421,6 +426,11 @@ export function WarehousesPage() {
                 </Field>
                 <Field label={t("scm.wh.f.address")}>
                   <Input value={whAddress} onChange={(e) => setWhAddress(e.target.value)} placeholder={t("scm.wh.p.eGBuilding4LogisticsPark")} disabled={!canManage || busy} />
+                </Field>
+                <Field label={t("grade.label")}>
+                  <Select value={whGrade ?? ""} onChange={(e) => setWhGrade(parseGrade(e.target.value))} disabled={!canManage || busy}>
+                    <GradeOptions />
+                  </Select>
                 </Field>
                 <Button type="submit" variant="primary" disabled={!canManage || busy}>{t("scm.wh.t.createWarehouse")}</Button>
               </form>

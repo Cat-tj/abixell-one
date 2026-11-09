@@ -8,6 +8,19 @@ import type {
   UpdateVerificationInput,
 } from "../../../domain/complaint/complaint.entity.js";
 
+/** A DATE column comes back from node-pg as a local-midnight Date; the entity
+ * (and the web's <input type="date">) wants the plain YYYY-MM-DD it stores. */
+function dateOnly(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRow(row: any): Complaint {
   return {
@@ -33,7 +46,7 @@ function mapRow(row: any): Complaint {
     correctiveAction: row.corrective_action,
     preventiveAction: row.preventive_action,
     correctiveActionOwnerUserId: row.corrective_action_owner_user_id,
-    correctiveActionTargetDate: row.corrective_action_target_date,
+    correctiveActionTargetDate: dateOnly(row.corrective_action_target_date),
     verificationNote: row.verification_note,
     verifiedByUserId: row.verified_by_user_id,
     verifiedAt: row.verified_at,

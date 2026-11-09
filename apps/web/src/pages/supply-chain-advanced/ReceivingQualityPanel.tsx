@@ -168,9 +168,36 @@ export function ReceivingQualityPanel() {
     setSelected(detail);
   }
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+
   async function handleInspect(e: React.FormEvent) {
     e.preventDefault();
-    if (!inspLineId) return;
+    if (
+      !formOk(
+        [inspLineId ? null : t("scm.rq.f.receivingLine")],
+        [
+          Number.isNaN(num(inspAccepted)) ? t("scm.rq.f.accepted") : null,
+          Number.isNaN(num(inspRejected)) ? t("scm.rq.f.rejected") : null,
+          Number.isNaN(num(inspQuarantined)) ? t("scm.rq.f.quarantined") : null,
+        ],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -178,9 +205,9 @@ export function ReceivingQualityPanel() {
       await api.createScmInspection(token, {
         receivingLineId: inspLineId,
         idempotencyKey: crypto.randomUUID(),
-        quantityAccepted: Number(inspAccepted),
-        quantityRejected: Number(inspRejected),
-        quantityQuarantined: Number(inspQuarantined),
+        quantityAccepted: num(inspAccepted),
+        quantityRejected: num(inspRejected),
+        quantityQuarantined: num(inspQuarantined),
         result: inspResult,
         reason: inspReason.trim() || null,
       });
@@ -196,7 +223,13 @@ export function ReceivingQualityPanel() {
 
   async function handleComplaint(e: React.FormEvent) {
     e.preventDefault();
-    if (!cmpLineId || !cmpDescription.trim()) return;
+    if (
+      !formOk(
+        [cmpLineId ? null : t("scm.rq.f.receivingLine"), cmpDescription.trim() ? null : t("scm.rq.f.description")],
+        [cmpQty.trim() && Number.isNaN(num(cmpQty)) ? t("scm.rq.f.quantity") : null],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -204,7 +237,7 @@ export function ReceivingQualityPanel() {
       await api.createScmDiscrepancy(token, {
         receivingLineId: cmpLineId,
         discrepancyType: cmpType,
-        quantity: cmpQty.trim() ? Number(cmpQty) : null,
+        quantity: cmpQty.trim() ? num(cmpQty) : null,
         description: cmpDescription.trim(),
       });
       setNotice(t("scm.rq.msg.complaintRecordedNoStockMovedTheGoodsAre"));
@@ -234,7 +267,19 @@ export function ReceivingQualityPanel() {
 
   async function handleReturn(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected || !rtvLineId || Number(rtvQty) <= 0 || !rtvReason.trim()) return;
+    if (!selected) return;
+    const rtvQtyNum = num(rtvQty);
+    if (
+      !formOk(
+        [
+          rtvLineId ? null : t("scm.rq.f.receivingLine"),
+          rtvQty.trim() === "" ? t("scm.rq.f.quantity") : null,
+          rtvReason.trim() ? null : t("scm.rq.f.reason"),
+        ],
+        [rtvQty.trim() !== "" && !(rtvQtyNum > 0) ? t("scm.rq.f.quantity") : null],
+      )
+    )
+      return;
     const line = lineMap.get(rtvLineId);
     if (!line) return;
     setBusy(true);
@@ -255,7 +300,7 @@ export function ReceivingQualityPanel() {
             locationId: line.locationId,
             stockCondition: rtvCondition,
             ownerType: line.ownerType,
-            quantity: Number(rtvQty),
+            quantity: rtvQtyNum,
             sortOrder: 1,
           },
         ],
@@ -443,7 +488,7 @@ export function ReceivingQualityPanel() {
                 <Field label={t("scm.rq.f.reason")}>
                   <Input value={inspReason} onChange={(e) => setInspReason(e.target.value)} placeholder={t("scm.rq.p.whyTheGoodsWereJudgedThisWay")} disabled={!canManage || busy} />
                 </Field>
-                <Button type="submit" variant="primary" disabled={!canManage || busy || !inspLineId}>
+                <Button type="submit" variant="primary" disabled={!canManage || busy}>
               {t("scm.rq.t.saveInspection")}
               </Button>
               </form>
@@ -476,7 +521,7 @@ export function ReceivingQualityPanel() {
                 <Field label={t("scm.rq.f.description")} required>
                   <Textarea value={cmpDescription} onChange={(e) => setCmpDescription(e.target.value)} rows={3} placeholder={t("scm.rq.p.whatIsWrongAndWithWhichGoods")} disabled={!canManage || busy} />
                 </Field>
-                <Button type="submit" variant="primary" disabled={!canManage || busy || !cmpLineId || !cmpDescription.trim()}>
+                <Button type="submit" variant="primary" disabled={!canManage || busy}>
               {t("scm.rq.t.recordComplaint")}
               </Button>
               </form>
@@ -515,7 +560,7 @@ export function ReceivingQualityPanel() {
                 <Field label={t("scm.rq.f.reason")} required>
                   <Input value={rtvReason} onChange={(e) => setRtvReason(e.target.value)} placeholder={t("scm.rq.p.whyTheGoodsGoBack")} disabled={!canManage || busy} />
                 </Field>
-                <Button type="submit" variant="primary" disabled={!canManage || busy || !rtvLineId || Number(rtvQty) <= 0 || !rtvReason.trim()}>
+                <Button type="submit" variant="primary" disabled={!canManage || busy}>
               {t("scm.rq.t.shipBack")}
               </Button>
                 <p className="text-xs text-ink-dim">

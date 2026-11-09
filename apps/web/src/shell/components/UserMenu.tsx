@@ -108,16 +108,16 @@ export function UserMenu({
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex min-h-[44px] items-center gap-2 rounded border border-line-strong bg-panel px-2 py-1 text-sm hover:bg-panel-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-1.5 py-1 text-sm hover:bg-panel-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span
           aria-hidden="true"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-on"
+          className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-extrabold text-accent"
         >
           {initials}
         </span>
         <span className="hidden min-w-0 flex-col items-start text-left sm:flex">
-          <span className="max-w-40 truncate text-sm font-medium text-ink">{displayName}</span>
+          <span className="max-w-40 truncate text-sm font-bold text-ink">{displayName}</span>
           {activeRoleName ? (
             <span className="max-w-40 truncate text-xs text-ink-dim" title={activeScopeName ?? undefined}>
               {activeRoleName}
@@ -134,7 +134,7 @@ export function UserMenu({
           ref={menuRef}
           role="menu"
           aria-label={t("userMenu.label")}
-          className="absolute right-0 z-30 mt-2 w-56 rounded border border-line bg-panel py-1 shadow-lg"
+          className="absolute right-0 z-30 mt-2 w-60 rounded-lg border border-line-strong bg-panel p-1 shadow-lg"
         >
           <div className="border-b border-line px-3 py-2">
             <div className="truncate text-sm font-medium text-ink">{displayName}</div>

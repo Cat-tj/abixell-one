@@ -29,9 +29,9 @@ import { useT } from "../../i18n/LocaleProvider";
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-on font-semibold hover:bg-accent-line shadow-[0_6px_14px_-6px_rgba(124,92,232,0.7)] disabled:opacity-50",
+  primary: "bg-accent text-accent-on font-bold hover:bg-accent-line disabled:opacity-50",
   secondary:
-    "border border-line-strong bg-panel text-ink-dim hover:bg-panel-3 hover:text-ink disabled:opacity-50",
+    "border border-line-strong bg-panel text-ink font-bold hover:bg-panel-2 disabled:opacity-50",
   ghost: "text-ink-dim hover:bg-panel-2 hover:text-ink disabled:opacity-50",
 };
 
@@ -42,7 +42,7 @@ export const Button = forwardRef<
   return (
     <button
       ref={ref}
-      className={`inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-ground sm:min-h-[36px] ${BUTTON_VARIANTS[variant]} ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-full px-5 py-1 text-sm font-semibold transition-colors sm:min-h-[40px] ${BUTTON_VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {children}
@@ -59,7 +59,7 @@ export function Card({
 }: PropsWithChildren<{ className?: string; onClick?: () => void }>) {
   return (
     <section
-      className={`rounded border border-line bg-panel p-3 sm:p-4 lg:p-6 ${className}`}
+      className={`rounded-xl border border-line bg-panel p-4 sm:p-[18px] ${className}`}
       onClick={onClick}
     >
       {children}
@@ -79,10 +79,10 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-xl font-semibold text-ink">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-ink-dim">{subtitle}</p>}
+        <h1 className="text-2xl font-extrabold tracking-[-0.02em] text-ink">{title}</h1>
+        {subtitle && <p className="mt-1 text-[0.92rem] text-ink-faint">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">{actions}</div>}
     </div>
@@ -102,7 +102,7 @@ export function Badge({
 }: PropsWithChildren<{ className?: string }>) {
   return (
     <span
-      className={`inline-flex items-center rounded border border-line bg-panel-2 px-2 py-0.5 text-xs font-medium text-ink-dim ${className}`}
+      className={`inline-flex items-center rounded-full bg-panel-2 px-2.5 py-0.5 text-xs font-bold text-ink-dim ${className}`}
     >
       {children}
     </span>
@@ -114,13 +114,13 @@ export function Badge({
 type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 const STATUS_TONES: Record<StatusTone, string> = {
-  neutral: "border-line-strong bg-status-idle-soft text-status-idle",
+  neutral: "bg-status-idle-soft text-status-idle",
   // `info` is not a status color in this direction, and the accent is never
   // used for one; an informational marker is neutral.
-  info: "border-line-strong bg-panel-2 text-ink-dim",
-  success: "border-status-ok bg-status-ok-soft text-status-ok",
-  warning: "border-status-warn bg-status-warn-soft text-status-warn",
-  danger: "border-status-danger bg-status-danger-soft text-status-danger",
+  info: "bg-panel-2 text-ink-dim",
+  success: "bg-status-ok-soft text-status-ok",
+  warning: "bg-status-warn-soft text-status-warn",
+  danger: "bg-status-danger-soft text-status-danger",
 };
 
 export function StatusPill({
@@ -129,7 +129,7 @@ export function StatusPill({
 }: PropsWithChildren<{ tone?: StatusTone }>) {
   return (
     <span
-      className={`inline-flex h-[19px] items-center gap-1 rounded px-2 text-[10.5px] font-semibold uppercase tracking-[0.04em] ${STATUS_TONES[tone]}`}
+      className={`inline-flex min-h-[22px] items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs font-bold ${STATUS_TONES[tone]}`}
     >
       {children}
     </span>
@@ -148,10 +148,10 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded border border-dashed border-line-strong bg-panel-2 px-6 py-12 text-center">
-      <h2 className="text-sm font-semibold text-ink">{title}</h2>
+    <div className="flex flex-col items-center justify-center rounded-xl border border-line bg-panel px-6 py-8 text-center">
+      <h2 className="text-base font-extrabold text-ink">{title}</h2>
       {description && (
-        <p className="mt-1 max-w-md text-sm text-ink-dim">{description}</p>
+        <p className="mt-1 max-w-md text-sm text-ink-faint">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -181,10 +181,10 @@ export function Spinner({ label = "Loading…" }: { label?: string }) {
 type AlertTone = "error" | "success" | "info" | "warning";
 
 const ALERT_TONES: Record<AlertTone, string> = {
-  error: "border border-status-danger bg-status-danger-soft text-status-danger",
-  success: "border border-status-ok bg-status-ok-soft text-status-ok",
-  info: "border border-line-strong bg-panel-2 text-ink-dim",
-  warning: "border border-status-warn bg-status-warn-soft text-status-warn",
+  error: "bg-status-danger-soft text-status-danger",
+  success: "bg-status-ok-soft text-status-ok",
+  info: "bg-panel-3 text-ink-dim",
+  warning: "bg-status-warn-soft text-status-warn",
 };
 
 /** Inline feedback primitive — the foundation's feedback mechanism for
@@ -195,7 +195,7 @@ export function Alert({
   children,
 }: PropsWithChildren<{ tone?: AlertTone }>) {
   return (
-    <div className={`rounded p-2 text-sm ${ALERT_TONES[tone]}`} role="alert">
+    <div className={`rounded-md px-4 py-3 text-sm font-semibold ${ALERT_TONES[tone]}`} role="alert">
       {children}
     </div>
   );
@@ -204,7 +204,7 @@ export function Alert({
 /* ------------------------------------------------- Form primitives (1C.2) */
 
 const CONTROL_CLASS =
-  "mt-1 min-h-[44px] w-full rounded border border-line-strong bg-panel-2 px-2 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-hidden focus:ring-2 focus:ring-accent-soft disabled:opacity-60 sm:min-h-[36px]";
+  "mt-1 min-h-[44px] w-full rounded-md border border-line-strong bg-panel px-3 py-2 text-[0.9375rem] text-ink placeholder:text-ink-faint focus:border-accent disabled:bg-panel-2 disabled:opacity-60";
 
 /** Labelled field wrapper — pairs a label with a control and optional hint. */
 export function Field({
@@ -215,7 +215,7 @@ export function Field({
 }: PropsWithChildren<{ label: string; required?: boolean; hint?: ReactNode }>) {
   return (
     <label className="block text-sm">
-      <span className="font-medium text-ink-dim">
+      <span className="font-bold text-ink">
         {label}
         {required && <span className="ml-0.5 text-status-danger">*</span>}
       </span>
@@ -280,12 +280,12 @@ export function Toggle({
         aria-label={label}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-ground disabled:opacity-50 ${
+        className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors disabled:opacity-50 ${
           checked ? "border-accent bg-accent" : "border-line-strong bg-panel-3"
         }`}
       >
         <span
-          className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-panel shadow transition-transform ${
+          className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-panel transition-transform ${
             checked ? "translate-x-5" : "translate-x-0.5"
           }`}
         />
@@ -339,7 +339,7 @@ export function DataTable<T>({
       {/* Mobile (Checkpoint 1C.7): stacked cards instead of a sideways-scrolling
           table, so dense operational/management tables stay usable on a phone.
           Cards follow the 44px touch-target rule, not the 32px desktop density. */}
-      <ul className={`space-y-3 ${cardVisibility}`}>
+      <ul className={`space-y-2 ${cardVisibility}`}>
         {rows.map((row) => {
           const titleColumns = columns.filter((column) => column.mobileRole === "title");
           const statusColumns = columns.filter((column) => column.mobileRole === "status");
@@ -352,7 +352,7 @@ export function DataTable<T>({
             <li
               key={keyOf(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={`rounded border border-line bg-panel p-3 ${onRowClick ? "cursor-pointer active:bg-panel-2" : ""}`}
+              className={`rounded-lg border border-line bg-panel p-3 ${onRowClick ? "cursor-pointer active:bg-panel-2" : ""}`}
             >
               {hasHierarchy && (
                 <div className="mb-2 flex items-start justify-between gap-3 border-b border-line pb-2">
@@ -372,7 +372,7 @@ export function DataTable<T>({
               )}
               {(hasHierarchy ? detailColumns : columns).map((column, index) => (
                 <div key={index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] items-start gap-3 py-1">
-                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint">
+                  <span className="text-xs font-bold text-ink-faint">
                     {column.header}
                   </span>
                   <span className="min-w-0 wrap-break-word text-right text-sm text-ink">
@@ -386,15 +386,15 @@ export function DataTable<T>({
       </ul>
 
       {/* Desktop/tablet: the full table (still scrolls inside its own box). */}
-      <div className={`${tableVisibility} overflow-x-auto rounded border border-line`}>
-        <table className="min-w-full border-collapse text-sm">
+      <div className={`${tableVisibility} overflow-x-auto rounded-lg border border-line bg-panel`}>
+        <table className="min-w-full border-collapse text-[0.92rem] tabular-nums">
           <thead>
-            <tr className="border-b border-line-strong">
+            <tr className="border-b border-line">
               {columns.map((column, index) => (
                 <th
                   key={index}
                   scope="col"
-                  className={`px-3 pb-2 pt-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.055em] text-ink-faint ${column.className ?? ""}`}
+                  className={`h-10 whitespace-nowrap bg-panel-2 px-3 ${/\btext-(right|center)\b/.test(column.className ?? "") ? "" : "text-left"} text-[0.84rem] font-extrabold text-ink-faint ${column.className ?? ""}`}
                 >
                   {column.header}
                 </th>
@@ -411,7 +411,7 @@ export function DataTable<T>({
                 {columns.map((column, index) => (
                   <td
                     key={index}
-                    className={`min-h-row px-3 align-middle text-ink ${column.className ?? ""}`}
+                    className={`h-10 px-3 py-2 align-middle text-ink ${column.className ?? ""}`}
                   >
                     {column.cell(row)}
                   </td>

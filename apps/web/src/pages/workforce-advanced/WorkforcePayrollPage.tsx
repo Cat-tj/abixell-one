@@ -143,6 +143,23 @@ export function WorkforcePayrollPage() {
     [employees],
   );
 
+  // Reports missing/invalid fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>, invalid: Array<[boolean, string]> = []): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return false;
+    }
+    const bad = invalid.filter(([isBad]) => isBad).map(([, label]) => label);
+    if (bad.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: bad.join(", ") }));
+      return false;
+    }
+    return true;
+  }
+
   async function runAction(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError(null);
@@ -159,6 +176,11 @@ export function WorkforcePayrollPage() {
   }
 
   async function createPolicy() {
+    if (!requireFields([
+      [policyCode.trim(), t("wf.payroll.f.policyCode")],
+      [policyName.trim(), t("wf.payroll.f.policyName")],
+      [effectiveFromPolicy, t("wf.payroll.f.effectiveFrom")],
+    ])) return;
     await runAction(
       () => api.createWorkforceStatutoryPolicy(token, {
         policyCode: policyCode.trim(),
@@ -172,6 +194,14 @@ export function WorkforcePayrollPage() {
   }
 
   async function saveProfile() {
+    if (!requireFields(
+      [
+        [profileEmployee, t("wf.payroll.f.employee")],
+        [baseSalary.trim(), t("wf.payroll.f.baseSalary")],
+        [profileEffectiveFrom, t("wf.payroll.f.effectiveFrom")],
+      ],
+      [[!(Number(baseSalary) > 0), t("wf.payroll.f.baseSalary")]],
+    )) return;
     await runAction(async () => {
       const saved = await api.setWorkforceSalaryProfile(token, {
         employeeId: profileEmployee,
@@ -191,6 +221,13 @@ export function WorkforcePayrollPage() {
   }
 
   async function createRun() {
+    if (!requireFields(
+      [[runMonth.trim(), t("wf.payroll.f.month")], [runYear.trim(), t("wf.payroll.f.year")]],
+      [
+        [!(Number(runMonth) >= 1 && Number(runMonth) <= 12), t("wf.payroll.f.month")],
+        [!(Number(runYear) >= 2000 && Number(runYear) <= 2100), t("wf.payroll.f.year")],
+      ],
+    )) return;
     await runAction(
       () => api.createWorkforcePayrollRun(token, {
         periodMonth: Number(runMonth),
@@ -340,7 +377,7 @@ export function WorkforcePayrollPage() {
             <Field label={t("wf.payroll.f.year")} required><Input type="number" min="2000" max="2100" value={runYear} onChange={(event) => setRunYear(event.target.value)} /></Field>
             <Field label={t("wf.payroll.f.organizationUnitId")}><Input value={runUnit} onChange={(event) => setRunUnit(event.target.value)} placeholder={t("wf.payroll.p.optionalScope")} /></Field>
           </div>
-          <Button className="mt-3" disabled={busy || !runMonth || !runYear} onClick={() => void createRun()}>{t("wf.payroll.t.createPayrollPeriod")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createRun()}>{t("wf.payroll.t.createPayrollPeriod")}</Button>
         </Card>
       ) : null}
 
@@ -360,7 +397,7 @@ export function WorkforcePayrollPage() {
             <Field label={t("wf.payroll.f.bankAccountNumber")}><Input value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} /></Field>
             <div className="flex items-center pt-6"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hasNpwp} onChange={(event) => setHasNpwp(event.target.checked)} />{t("wf.payroll.f.hasRegisteredNpwp")}</label></div>
           </div>
-          <Button className="mt-3" disabled={busy || !profileEmployee || Number(baseSalary) <= 0 || !profileEffectiveFrom} onClick={() => void saveProfile()}>{t("wf.payroll.t.saveSalaryProfile")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void saveProfile()}>{t("wf.payroll.t.saveSalaryProfile")}</Button>
           {profileEmployee && savedProfiles[profileEmployee] ? (
             <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
               <span className="font-semibold">{t("wf.payroll.t.lastSavedProfile")}</span> Base {money(savedProfiles[profileEmployee].baseSalary)} | Allowance {money(savedProfiles[profileEmployee].fixedAllowance)} | PTKP {savedProfiles[profileEmployee].ptkpStatus}
@@ -373,11 +410,11 @@ export function WorkforcePayrollPage() {
         <Card>
           <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("wf.payroll.t.createStatutoryPolicy")}</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label={t("wf.payroll.f.policyCode")} required><Input value={policyCode} onChange={(event) => setPolicyCode(event.target.value)} placeholder="ID_STATUTORY_2026" /></Field>
+            <Field label={t("wf.payroll.f.policyCode")} required><Input value={policyCode} onChange={(event) => setPolicyCode(event.target.value)} placeholder={t("common.form.example", { value: "ID_STATUTORY_2026" })} /></Field>
             <Field label={t("wf.payroll.f.policyName")} required><Input value={policyName} onChange={(event) => setPolicyName(event.target.value)} placeholder={t("wf.payroll.p.indonesiaStandard2026")} /></Field>
             <Field label={t("wf.payroll.f.effectiveFrom")} required><Input type="date" value={effectiveFromPolicy} onChange={(event) => setEffectiveFromPolicy(event.target.value)} /></Field>
           </div>
-          <Button className="mt-3" disabled={busy || !policyCode.trim() || !policyName.trim()} onClick={() => void createPolicy()}>{t("wf.payroll.t.createStatutoryPolicy")}</Button>
+          <Button className="mt-3" disabled={busy} onClick={() => void createPolicy()}>{t("wf.payroll.t.createStatutoryPolicy")}</Button>
         </Card>
       ) : null}
 

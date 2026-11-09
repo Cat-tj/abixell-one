@@ -104,6 +104,24 @@ export function AssetMaintenanceWorkOrderDetailPage() {
     }
   }
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+  const isNum = (v: string) => v.trim() !== "" && !Number.isNaN(num(v));
+
   if (loading) return <Spinner label={t("sca.maint.f.loadingMaintenanceWorkOrder")} />;
   if (!detail) return <Alert tone="error">{error ?? "Maintenance work order not found."}</Alert>;
 
@@ -210,14 +228,19 @@ export function AssetMaintenanceWorkOrderDetailPage() {
               </Field>
               <div className="flex items-end gap-2">
                 <Button
-                  disabled={busy || !assignedToUserId || Boolean(workOrder.assignedAt)}
-                  onClick={() => void run(() => api.assignAssetMaintenanceWorkOrder(token, workOrder.id, assignedToUserId), "Work order assigned.")}
+                  disabled={busy || Boolean(workOrder.assignedAt)}
+                  title={workOrder.assignedAt ? t("sca.maint.n.alreadyAssigned") : undefined}
+                  onClick={() => {
+                    if (!formOk([assignedToUserId ? null : t("sca.maint.f.assignToUser")])) return;
+                    void run(() => api.assignAssetMaintenanceWorkOrder(token, workOrder.id, assignedToUserId), "Work order assigned.");
+                  }}
                 >
                   Assign
                 </Button>
                 <Button
                   variant="secondary"
                   disabled={busy || Boolean(workOrder.startedAt)}
+                  title={workOrder.startedAt ? t("sca.maint.n.alreadyStarted") : undefined}
                   onClick={() => void run(() => api.startAssetMaintenanceWorkOrder(token, workOrder.id), "Work order started.")}
                 >
                   Start
@@ -227,7 +250,7 @@ export function AssetMaintenanceWorkOrderDetailPage() {
 
             {availableActions.length > 0 ? (
               <div className="mt-4 border-t border-slate-100 pt-4">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("sca.maint.t.workflowActions")}</h3>
+                <h3 className="mb-2 text-xs font-bold text-slate-500">{t("sca.maint.t.workflowActions")}</h3>
                 <Field label={t("sca.maint.f.workflowComment")}>
                   <Input value={workflowComment} onChange={(e) => setWorkflowComment(e.target.value)} placeholder={t("sca.maint.p.optionalComment")} />
                 </Field>
@@ -274,21 +297,39 @@ export function AssetMaintenanceWorkOrderDetailPage() {
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 disabled={busy || Boolean(workOrder.completedAt)}
-                onClick={() => void run(
-                  () => api.completeAssetMaintenanceWorkOrder(token, workOrder.id, {
-                    completionNotes: completionNotes || null,
-                    actualCost: actualCost ? Number(actualCost) : null,
-                    downtimeHours: downtimeHours ? Number(downtimeHours) : null,
-                    currentMeterReading: currentMeterReading ? Number(currentMeterReading) : null,
-                  }),
-                  "Work order completed.",
-                )}
+                title={workOrder.completedAt ? t("sca.maint.n.alreadyCompleted") : undefined}
+                onClick={() => {
+                  if (
+                    !formOk([], [
+                      actualCost.trim() && !isNum(actualCost) ? t("sca.maint.f.actualCost") : null,
+                      downtimeHours.trim() && !isNum(downtimeHours) ? t("sca.maint.f.downtimeHours") : null,
+                      currentMeterReading.trim() && !isNum(currentMeterReading) ? t("sca.maint.f.currentMeterReading") : null,
+                    ])
+                  )
+                    return;
+                  void run(
+                    () => api.completeAssetMaintenanceWorkOrder(token, workOrder.id, {
+                      completionNotes: completionNotes || null,
+                      actualCost: actualCost.trim() ? num(actualCost) : null,
+                      downtimeHours: downtimeHours.trim() ? num(downtimeHours) : null,
+                      currentMeterReading: currentMeterReading.trim() ? num(currentMeterReading) : null,
+                    }),
+                    "Work order completed.",
+                  );
+                }}
               >
                 Complete Work
               </Button>
               <Button
                 variant="secondary"
                 disabled={busy || !workOrder.completedAt || Boolean(workOrder.verifiedAt)}
+                title={
+                  workOrder.verifiedAt
+                    ? t("sca.maint.n.alreadyVerified")
+                    : !workOrder.completedAt
+                      ? t("sca.maint.n.completeFirst")
+                      : undefined
+                }
                 onClick={() => void run(
                   () => api.verifyAssetMaintenanceWorkOrder(token, workOrder.id, verificationNotes || null),
                   "Work order verified.",
@@ -331,16 +372,28 @@ export function AssetMaintenanceWorkOrderDetailPage() {
             </Field>
             <div className="sm:col-span-4">
               <Button
-                disabled={busy || !partItemId || !partQuantity}
-                onClick={() => void run(
-                  () => api.recordAssetMaintenancePart(token, workOrder.id, {
-                    itemId: partItemId,
-                    quantity: Number(partQuantity),
-                    unitCost: partUnitCost ? Number(partUnitCost) : null,
-                    notes: partNotes || null,
-                  }),
-                  "Spare part recorded.",
-                )}
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    !formOk(
+                      [partItemId ? null : t("sca.maint.f.item"), partQuantity.trim() ? null : t("sca.maint.f.quantity")],
+                      [
+                        partQuantity.trim() && !(num(partQuantity) > 0) ? t("sca.maint.f.quantity") : null,
+                        partUnitCost.trim() && !isNum(partUnitCost) ? t("sca.maint.f.unitCost") : null,
+                      ],
+                    )
+                  )
+                    return;
+                  void run(
+                    () => api.recordAssetMaintenancePart(token, workOrder.id, {
+                      itemId: partItemId,
+                      quantity: num(partQuantity),
+                      unitCost: partUnitCost.trim() ? num(partUnitCost) : null,
+                      notes: partNotes || null,
+                    }),
+                    "Spare part recorded.",
+                  );
+                }}
               >
                 Record Part Usage
               </Button>

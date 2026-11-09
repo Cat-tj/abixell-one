@@ -37,6 +37,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDate, formatDateShort } from "../../shared/format";
+import { localDateInputValue, localDateTimeInputValue } from "../../shared/localDateTime";
 
 const METER_TYPES: MeterReadingType[] = ["hours", "km", "cycles"];
 const DOWNTIME_REASONS: DowntimeReasonCategory[] = [
@@ -77,11 +78,11 @@ export function AssetPerformancePage() {
   // Meter form
   const [readingType, setReadingType] = useState<MeterReadingType>("hours");
   const [readingValue, setReadingValue] = useState("");
-  const [readingDate, setReadingDate] = useState(() => new Date().toISOString().slice(0, 16));
+  const [readingDate, setReadingDate] = useState(() => localDateTimeInputValue());
   const [meterNotes, setMeterNotes] = useState("");
 
   // Downtime form
-  const [downtimeStart, setDowntimeStart] = useState(() => new Date().toISOString().slice(0, 16));
+  const [downtimeStart, setDowntimeStart] = useState(() => localDateTimeInputValue());
   const [downtimeEnd, setDowntimeEnd] = useState("");
   const [downtimeReason, setDowntimeReason] = useState<DowntimeReasonCategory>("breakdown");
   const [downtimeNotes, setDowntimeNotes] = useState("");
@@ -91,9 +92,9 @@ export function AssetPerformancePage() {
   const [periodStart, setPeriodStart] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 90);
-    return d.toISOString().slice(0, 10);
+    return localDateInputValue(d);
   });
-  const [periodEnd, setPeriodEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [periodEnd, setPeriodEnd] = useState(() => localDateInputValue());
 
   const load = useCallback(async () => {
     if (!assetId) return;
@@ -134,15 +135,39 @@ export function AssetPerformancePage() {
     void load();
   }, [load]);
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const meterValue = Number(readingValue.replace(/\s/g, "").replace(",", "."));
+
   async function recordMeter() {
     if (!assetId || !canManageMeters) return;
+    if (
+      !formOk(
+        [readingValue.trim() ? null : t("sca.perf.f.value")],
+        [readingValue.trim() && (Number.isNaN(meterValue) || meterValue < 0) ? t("sca.perf.f.value") : null],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       await api.recordAssetMeterReading(token, assetId, {
         readingType,
-        readingValue: Number(readingValue),
+        readingValue: meterValue,
         readingDate: readingDate ? new Date(readingDate).toISOString() : undefined,
         notes: meterNotes || null,
       });
@@ -159,6 +184,13 @@ export function AssetPerformancePage() {
 
   async function recordDowntime() {
     if (!assetId || !canManageDowntime) return;
+    if (
+      !formOk(
+        [downtimeStart ? null : t("sca.perf.f.startTime")],
+        [downtimeStart && downtimeEnd && downtimeEnd < downtimeStart ? t("sca.perf.f.endTimeOptional") : null],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -321,27 +353,27 @@ export function AssetPerformancePage() {
           {reliability ? (
             <div className="mt-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-4 lg:grid-cols-6">
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.availability")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.availability")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.availabilityPct}%</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">MTBF</div>
+                <div className="text-xs font-mediumr text-slate-400">MTBF</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.mtbfHours} hrs</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">MTTR</div>
+                <div className="text-xs font-mediumr text-slate-400">MTTR</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.mttrHours} hrs</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.failures")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.failures")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.correctiveFailureCount}</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.downtime")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.downtime")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.downtimeHours} hrs</div>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">{t("sca.perf.t.operating")}</div>
+                <div className="text-xs font-mediumr text-slate-400">{t("sca.perf.t.operating")}</div>
                 <div className="mt-1 text-lg font-bold text-slate-900">{reliability.operationalHours} hrs</div>
               </div>
             </div>
@@ -366,7 +398,7 @@ export function AssetPerformancePage() {
           ) : null}
 
           <div className="mt-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">{t("sca.perf.t.historicalSnapshots")}</h3>
+            <h3 className="mb-2 text-xs font-semiboldr text-slate-500">{t("sca.perf.t.historicalSnapshots")}</h3>
             <DataTable
               columns={snapshotColumns}
               rows={snapshots}
@@ -405,7 +437,7 @@ export function AssetPerformancePage() {
                 </Field>
               </div>
               <div className="sm:col-span-3">
-                <Button disabled={busy || !readingValue} onClick={() => void recordMeter()}>
+                <Button disabled={busy} onClick={() => void recordMeter()}>
                   Record Monotonic Reading
                 </Button>
               </div>
@@ -444,7 +476,7 @@ export function AssetPerformancePage() {
                 <Input value={downtimeNotes} onChange={(e) => setDowntimeNotes(e.target.value)} />
               </Field>
               <div className="sm:col-span-2">
-                <Button disabled={busy || !downtimeStart} onClick={() => void recordDowntime()}>
+                <Button disabled={busy} onClick={() => void recordDowntime()}>
                   Record Downtime
                 </Button>
               </div>

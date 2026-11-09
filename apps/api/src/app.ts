@@ -32,6 +32,8 @@ import { registerMyDashboardRoutes } from "./interfaces/http/routes/my-dashboard
 import { registerDocumentRoutes } from "./interfaces/http/routes/documents.js";
 import { registerSchedulerRoutes } from "./interfaces/http/routes/scheduler.js";
 import { registerIntegrationRoutes } from "./interfaces/http/routes/integration.js";
+import { registerPartnerApi } from "./interfaces/http/routes/partner/index.js";
+import { registerPartnerCredentialRoutes } from "./interfaces/http/routes/partner-credentials.js";
 import { registerObservabilityRoutes } from "./interfaces/http/routes/observability.js";
 import { registerCustomerRoutes } from "./interfaces/http/routes/customers.js";
 import { registerContractRoutes } from "./interfaces/http/routes/contracts.js";
@@ -50,6 +52,7 @@ import { registerServiceOperationsRoutes } from "./modules/service-operations/co
 import { registerServiceOperationsAdvancedRoutes } from "./modules/service-operations/advanced/api/service-operations-advanced.routes.js";
 import { registerWorkforceRoutes } from "./modules/workforce/core/api/workforce.routes.js";
 import { registerWorkforceAdvancedRoutes } from "./modules/workforce/advanced/api/workforce-advanced.routes.js";
+import { createPriceMaskHook } from "./application/supply-chain/price-visibility.js";
 import { registerSupplyChainRoutes } from "./modules/supply-chain/core/api/supply-chain.routes.js";
 import { registerSupplyChainAdvancedRoutes } from "./modules/supply-chain/advanced/api/supply-chain-advanced.routes.js";
 import { registerWmsRoutes } from "./modules/supply-chain/warehouse/api/wms.routes.js";
@@ -173,6 +176,9 @@ export function buildApp(): FastifyInstance {
   // order regardless of whether those plugin `register()` calls above
   // are awaited.
   app.register(async (scoped) => {
+    // LOA price visibility: WMS/procurement/SCM responses carry price fields
+    // as null unless the caller holds `wms.price.view` (see price-visibility.ts).
+    scoped.addHook("preSerialization", createPriceMaskHook(container.rbac));
     scoped.register(healthRoutes);
     registerAuthRoutes(scoped, container);
     registerTenantRoutes(scoped, container);
@@ -205,6 +211,11 @@ export function buildApp(): FastifyInstance {
     registerDocumentRoutes(scoped, container);
     registerSchedulerRoutes(scoped, container);
     registerIntegrationRoutes(scoped, container);
+    registerPartnerCredentialRoutes(scoped, container);
+    // Wave A8 / WP-PLT-A8-01 (PLT-ADV-001): versioned partner surface over
+    // existing services. Machine-authenticated; registry-covered; see
+    // partner/index.ts and ADR-0028.
+    registerPartnerApi(scoped, container);
     registerObservabilityRoutes(scoped, container);
     registerCustomerRoutes(scoped, container);
     registerContractRoutes(scoped, container);

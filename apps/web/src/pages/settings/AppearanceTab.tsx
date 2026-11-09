@@ -15,6 +15,7 @@ export function AppearanceTab({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="max-w-2xl space-y-4">
+      {!canManage && <p className="text-sm text-ink-dim">{t("appearance.readOnlyHint")}</p>}
       <Card>
         <h2 className="text-sm font-semibold text-ink">{t("appearance.themeTitle")}</h2>
         <p className="mt-1 text-sm text-ink-dim">{t("appearance.themeDesc")}</p>

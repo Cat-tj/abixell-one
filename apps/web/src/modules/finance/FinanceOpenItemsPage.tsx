@@ -116,10 +116,36 @@ export function FinanceOpenItemsPage() {
   // pair the service would reject.
   const creditItems = items.filter((item) => item.direction === "credit");
   const debitItems = items.filter((item) => item.direction === "debit");
-  const amountValid = isValidAmount4Input(allocationAmount) && /[1-9]/.test(allocationAmount);
-  const canAllocate = legalEntityId !== "" && sourceItemId !== "" && targetItemId !== "" && amountValid && allocationDate !== "";
+  // A comma is accepted as the decimal separator ("12,5" -> "12.5").
+  const decimal = (v: string) => v.trim().replace(",", ".");
+  const allocationNorm = decimal(allocationAmount);
+  const amountValid = isValidAmount4Input(allocationNorm) && /[1-9]/.test(allocationNorm);
+
+  function formProblem(kind: "missing" | "invalid", fields: Array<string | null>): boolean {
+    const list = fields.filter((x): x is string => x !== null);
+    if (list.length === 0) return false;
+    setNotice(null);
+    setError(t(kind === "missing" ? "common.form.missing" : "common.form.invalid", { fields: list.join(", ") }));
+    return true;
+  }
 
   async function createItem() {
+    if (
+      formProblem("missing", [
+        !partyId ? (side === "AR" ? t("fin.common.customer") : t("finOpen.supplier")) : null,
+        !documentNo.trim() ? t("finOpen.documentNo") : null,
+        !documentDate ? t("finOpen.documentDate") : null,
+        originalAmount.trim() === "" ? t("fin.common.amount") : null,
+        !currency.trim() ? t("fin.common.currency") : null,
+        !sourceRefTable.trim() ? t("finOpen.sourceTable") : null,
+        !sourceRefId.trim() ? t("finOpen.sourceId") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formProblem("invalid", [!isValidAmount4Input(decimal(originalAmount)) ? t("fin.common.amount") : null])) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -138,7 +164,7 @@ export function FinanceOpenItemsPage() {
         dueDate: dueDate || null,
         currency,
         // Verbatim text at 4 decimals — never parsed to a number.
-        originalAmount: originalAmount.trim(),
+        originalAmount: decimal(originalAmount),
       });
       setNotice(
         t("finOpen.recorded", {
@@ -158,6 +184,17 @@ export function FinanceOpenItemsPage() {
   }
 
   async function allocate() {
+    if (
+      formProblem("missing", [
+        !sourceItemId ? t("finOpen.settlesCredit") : null,
+        !targetItemId ? t("finOpen.settledDebit") : null,
+        allocationAmount.trim() === "" ? t("fin.common.amount") : null,
+        !allocationDate ? t("finOpen.allocationDate") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formProblem("invalid", [!amountValid ? t("fin.common.amount") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -166,7 +203,7 @@ export function FinanceOpenItemsPage() {
         legalEntityId,
         sourceOpenItemId: sourceItemId,
         targetOpenItemId: targetItemId,
-        amount: allocationAmount.trim(),
+        amount: allocationNorm,
         allocationDate,
         idempotencyKey: newIdempotencyKey(),
       });
@@ -269,7 +306,7 @@ export function FinanceOpenItemsPage() {
                 </Select>
               </Field>
               <Field label={t("finOpen.documentNo")} required>
-                <Input value={documentNo} onChange={(e) => setDocumentNo(e.target.value)} placeholder="INV-2026-0001" />
+                <Input value={documentNo} onChange={(e) => setDocumentNo(e.target.value)} placeholder={t("common.form.example", { value: "INV-2026-0001" })} />
               </Field>
               <Field label={t("finOpen.documentDate")} required>
                 <Input type="date" value={documentDate} onChange={(e) => setDocumentDate(e.target.value)} />
@@ -280,14 +317,14 @@ export function FinanceOpenItemsPage() {
               <Field
                 label={t("fin.common.amount")}
                 required
-                hint={originalAmount && !isValidAmount4Input(originalAmount) ? t("finOpen.amountHint") : undefined}
+                hint={originalAmount && !isValidAmount4Input(decimal(originalAmount)) ? t("finOpen.amountHint") : undefined}
               >
                 <Input
                   inputMode="decimal"
                   value={originalAmount}
                   onChange={(e) => setOriginalAmount(e.target.value)}
-                  placeholder="1250.7500"
-                  aria-invalid={originalAmount !== "" && !isValidAmount4Input(originalAmount)}
+                  placeholder={t("common.form.example", { value: "1250.7500" })}
+                  aria-invalid={originalAmount !== "" && !isValidAmount4Input(decimal(originalAmount))}
                 />
               </Field>
               <Field label={t("fin.common.currency")} required>
@@ -297,19 +334,12 @@ export function FinanceOpenItemsPage() {
                 <Input value={sourceRefTable} onChange={(e) => setSourceRefTable(e.target.value)} />
               </Field>
               <Field label={t("finOpen.sourceId")} required hint={t("finOpen.sourceIdHint")}>
-                <Input value={sourceRefId} onChange={(e) => setSourceRefId(e.target.value)} placeholder="UUID" />
+                <Input value={sourceRefId} onChange={(e) => setSourceRefId(e.target.value)} placeholder={t("common.form.example", { value: "UUID" })} />
               </Field>
             </div>
             <div className="mt-3">
               <Button
-                disabled={
-                  busy ||
-                  !partyId ||
-                  !documentNo.trim() ||
-                  !documentDate ||
-                  !sourceRefId.trim() ||
-                  !isValidAmount4Input(originalAmount)
-                }
+                disabled={busy}
                 onClick={() => void createItem()}
               >
                 {t("finOpen.record")}
@@ -350,7 +380,7 @@ export function FinanceOpenItemsPage() {
                   inputMode="decimal"
                   value={allocationAmount}
                   onChange={(e) => setAllocationAmount(e.target.value)}
-                  placeholder="500.0000"
+                  placeholder={t("common.form.example", { value: "500.0000" })}
                   aria-invalid={allocationAmount !== "" && !amountValid}
                 />
               </Field>
@@ -359,7 +389,7 @@ export function FinanceOpenItemsPage() {
               </Field>
             </div>
             <div className="mt-3">
-              <Button disabled={busy || !canAllocate} onClick={() => void allocate()}>
+              <Button disabled={busy} onClick={() => void allocate()}>
                 {t("finOpen.allocate")}
               </Button>
             </div>

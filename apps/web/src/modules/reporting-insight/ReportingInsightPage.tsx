@@ -242,7 +242,10 @@ export function ReportingInsightPage() {
 
   // Standard report export
   const exportReport = async () => {
-    if (!selectedCode) return;
+    if (!selectedCode) {
+      setError(t("common.form.missing", { fields: t("ri.main.t.standardReport") }));
+      return;
+    }
     setExporting(true);
     setError(null);
     try {
@@ -266,7 +269,7 @@ export function ReportingInsightPage() {
   // BI Query execution
   const executeBiQuery = async () => {
     if (!selectedDatasetCode || (selectedDimensions.length === 0 && selectedMeasures.length === 0)) {
-      setBiError("Please select at least one dimension or measure.");
+      setBiError(t("common.form.missing", { fields: "Group By Dimensions / Aggregated Measures" }));
       return;
     }
     setBiExecuting(true);
@@ -289,7 +292,10 @@ export function ReportingInsightPage() {
 
   // BI Query CSV export
   const exportBiQuery = async () => {
-    if (!selectedDatasetCode) return;
+    if (!selectedDatasetCode || (selectedDimensions.length === 0 && selectedMeasures.length === 0)) {
+      setBiError(t("common.form.missing", { fields: "Group By Dimensions / Aggregated Measures" }));
+      return;
+    }
     setBiExporting(true);
     setBiError(null);
     const config: BiQueryConfig = {
@@ -319,7 +325,15 @@ export function ReportingInsightPage() {
   // Save BI report
   const handleSaveReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newReportTitle.trim() || !newReportCode.trim() || !selectedDatasetCode) return;
+    const missingFields = [
+      !newReportCode.trim() ? t("ri.main.t.reportCode") : null,
+      !newReportTitle.trim() ? t("ri.main.t.reportTitle") : null,
+    ].filter((label): label is string => label !== null);
+    if (missingFields.length > 0) {
+      setBiError(t("common.form.missing", { fields: missingFields.join(", ") }));
+      return;
+    }
+    if (!selectedDatasetCode) return;
     setSavingReport(true);
     setBiError(null);
     try {
@@ -355,6 +369,18 @@ export function ReportingInsightPage() {
 
   // Generate predictive forecast
   const handleGenerateForecast = async () => {
+    const invalidFields = [
+      !Number.isInteger(lookbackDays) || lookbackDays < 30 || lookbackDays > 365
+        ? `${t("ri.main.t.historicalLookbackDays")} (30-365)`
+        : null,
+      !Number.isInteger(forecastDays) || forecastDays < 1 || forecastDays > 30
+        ? `${t("ri.main.t.forecastHorizonDays")} (1-30)`
+        : null,
+    ].filter((label): label is string => label !== null);
+    if (invalidFields.length > 0) {
+      setPredictiveError(t("common.form.invalid", { fields: invalidFields.join(", ") }));
+      return;
+    }
     setForecastGenerating(true);
     setPredictiveError(null);
     try {
@@ -489,7 +515,7 @@ export function ReportingInsightPage() {
                             key={`${module.moduleCode}-${card.label}`}
                             className="rounded border border-slate-100 bg-slate-50 p-3"
                           >
-                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                            <p className="text-xs font-bold text-slate-500">
                               {card.label}
                             </p>
                             <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
@@ -521,7 +547,7 @@ export function ReportingInsightPage() {
                     </label>
                     <Button
                       onClick={exportReport}
-                      disabled={!selectedCode || exporting}
+                      disabled={exporting}
                       variant="secondary"
                     >
                       {exporting ? "Exporting…" : "Export CSV"}
@@ -539,7 +565,7 @@ export function ReportingInsightPage() {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       {Object.entries(result.summary).map(([key, value]) => (
                         <Card key={key}>
-                          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                          <p className="text-xs font-bold text-slate-500">
                             {humanize(key)}
                           </p>
                           <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">
@@ -702,7 +728,7 @@ export function ReportingInsightPage() {
                     <div className="space-y-4">
                       {/* Dimensions Selection */}
                       <div>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        <span className="text-xs font-semiboldr text-slate-500">
                           Group By Dimensions
                         </span>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -736,7 +762,7 @@ export function ReportingInsightPage() {
 
                       {/* Measures Selection */}
                       <div>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        <span className="text-xs font-semiboldr text-slate-500">
                           Aggregated Measures
                         </span>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -771,7 +797,7 @@ export function ReportingInsightPage() {
                       {/* Filter Builder */}
                       <div>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          <span className="text-xs font-semiboldr text-slate-500">
                             Data Filters
                           </span>
                           <button
@@ -857,14 +883,14 @@ export function ReportingInsightPage() {
                       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
                         <Button
                           onClick={exportBiQuery}
-                          disabled={biExporting || (selectedDimensions.length === 0 && selectedMeasures.length === 0)}
+                          disabled={biExporting}
                           variant="secondary"
                         >
                           {biExporting ? "Exporting CSV…" : "Export BI CSV"}
                         </Button>
                         <Button
                           onClick={executeBiQuery}
-                          disabled={biExecuting || (selectedDimensions.length === 0 && selectedMeasures.length === 0)}
+                          disabled={biExecuting}
                           variant="primary"
                         >
                           {biExecuting ? "Executing Query…" : "Run Governed Query"}
@@ -961,8 +987,8 @@ export function ReportingInsightPage() {
                   <span className="font-medium text-slate-700">{t("ri.main.t.forecastHorizonDays")}</span>
                   <Input
                     type="number"
-                    min={7}
-                    max={90}
+                    min={1}
+                    max={30}
                     value={forecastDays}
                     onChange={(e) => setForecastDays(Number(e.target.value))}
                   />
@@ -976,7 +1002,7 @@ export function ReportingInsightPage() {
                   variant="primary"
                   className="w-full sm:w-auto"
                 >
-                  {forecastGenerating ? "Computing Model…" : "Generate Forecast"}
+                  {forecastGenerating ? t("ri.main.b.computingModel") : t("ri.main.b.generateForecast")}
                 </Button>
               </div>
             </div>
@@ -993,7 +1019,7 @@ export function ReportingInsightPage() {
               {forecastResponse.forecast.status === "insufficient_data" ? (
                 <Card>
                   <div className="flex items-start gap-3">
-                    <div className="rounded-full bg-amber-100 p-2 text-amber-600">⚠️</div>
+                    <div aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-600">!</div>
                     <div>
                       <h4 className="font-semibold text-slate-900">{t("ri.main.t.insufficientOperationalHistory")}</h4>
                       <p className="mt-1 text-sm text-slate-600">
@@ -1012,7 +1038,7 @@ export function ReportingInsightPage() {
                   {forecastResponse.forecast.metrics && (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <Card>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <p className="text-xs font-bold text-slate-500">
                           Historical Daily Average
                         </p>
                         <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
@@ -1020,7 +1046,7 @@ export function ReportingInsightPage() {
                         </p>
                       </Card>
                       <Card>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <p className="text-xs font-bold text-slate-500">
                           Trend Slope / Day
                         </p>
                         <p
@@ -1037,7 +1063,7 @@ export function ReportingInsightPage() {
                         </p>
                       </Card>
                       <Card>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <p className="text-xs font-bold text-slate-500">
                           Projected Next Period Total
                         </p>
                         <p className="mt-1 text-2xl font-bold tabular-nums text-blue-600">

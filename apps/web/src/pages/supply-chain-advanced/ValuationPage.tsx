@@ -99,15 +99,43 @@ export function ValuationPage() {
   const whMap = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
   const poMap = useMemo(() => new Map(pos.map((p) => [p.id, p])), [pos]);
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+
   async function handleCreateLandedCost(e: React.FormEvent) {
     e.preventDefault();
-    if (!lcPoId || items.length === 0) return;
+    if (
+      !formOk(
+        [
+          lcPoId ? null : t("scm.val.f.targetPurchaseOrder"),
+          lcCostType.trim() ? null : t("scm.val.f.costType"),
+          lcFreight.trim() ? null : t("scm.val.f.amountIdr"),
+        ],
+        [lcFreight.trim() && !(num(lcFreight) > 0) ? t("scm.val.f.amountIdr") : null],
+      )
+    )
+      return;
+    if (!formOk([items.length > 0 ? null : t("scm.val.h.item")])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const targetItem = items[0];
-      const allocAmount = Number(lcFreight) || 0;
+      const allocAmount = num(lcFreight) || 0;
       await api.createScmLandedCost(token, {
         purchaseOrderId: lcPoId,
         costType: lcCostType,
@@ -168,8 +196,8 @@ export function ValuationPage() {
     { header: t("scm.val.h.warehouse"), cell: (r) => r.warehouseId ? (whMap.get(r.warehouseId)?.name || r.warehouseId) : "Global" },
     { header: t("scm.val.h.originalQty"), cell: (r) => <span className="font-mono">{r.originalQuantity}</span> },
     { header: t("scm.val.h.remainingQty"), cell: (r) => <span className="font-mono font-bold text-blue-600">{r.remainingQuantity}</span> },
-    { header: t("scm.val.h.unitCostIdr"), cell: (r) => <span className="font-mono">{formatMoney(String(r.effectiveUnitCost))}</span> },
-    { header: t("scm.val.h.totalRemainingValue"), cell: (r) => <span className="font-mono font-semibold text-emerald-600">{formatMoney(String(r.totalValue))}</span>, mobileRole: "status" },
+    { header: t("scm.val.h.unitCostIdr"), cell: (r) => <span className="font-mono">{formatMoney(r.effectiveUnitCost)}</span> },
+    { header: t("scm.val.h.totalRemainingValue"), cell: (r) => <span className="font-mono font-semibold text-emerald-600">{formatMoney(r.totalValue)}</span>, mobileRole: "status" },
     { header: t("scm.val.h.receivedDate"), cell: (r) => formatDateShort(r.receivedDate) },
   ];
 
@@ -178,7 +206,7 @@ export function ValuationPage() {
     { header: t("scm.val.h.purchaseOrder"), cell: (r) => poMap.get(r.purchaseOrderId)?.orderNumber || r.purchaseOrderId },
     { header: t("scm.val.h.costType"), cell: (r) => r.costType },
     { header: t("scm.val.h.method"), cell: (r) => label(r.allocationMethod) },
-    { header: t("scm.val.h.amount"), cell: (r) => <span className="font-mono font-bold text-slate-800">{formatMoney(String(r.amount))}</span> },
+    { header: t("scm.val.h.amount"), cell: (r) => <span className="font-mono font-bold text-slate-800">{formatMoney(r.amount)}</span> },
     { header: t("scm.val.h.status"), cell: (r) => <StatusPill tone={r.status === "applied" ? "success" : "warning"}>{label(r.status)}</StatusPill>, mobileRole: "status" },
     {
       header: t("scm.val.h.actions"),
@@ -202,6 +230,7 @@ export function ValuationPage() {
 
       {error && <Alert tone="error">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
+      {!canManage && <Alert tone="info">{t("scm.val.n.readOnly")}</Alert>}
 
       <div className="flex gap-2 border-b border-slate-200 pb-2">
         <Button variant={tab === "layers" ? "primary" : "secondary"} onClick={() => { setTab("layers"); setSelectedLandedCost(null); }}>{t("scm.val.t.fifoValuationLayers")}</Button>
@@ -272,14 +301,14 @@ export function ValuationPage() {
               <div className="space-y-4">
                 <div className="flex gap-4 text-sm">
                   <div><strong>{t("scm.val.f.status")}</strong> <StatusPill tone={selectedLandedCost.landedCost.status === "applied" ? "success" : "warning"}>{label(selectedLandedCost.landedCost.status)}</StatusPill></div>
-                  <div><strong>{t("scm.val.f.totalCost")}</strong> <span className="font-mono font-bold">{formatMoney(String(selectedLandedCost.landedCost.amount))}</span></div>
+                  <div><strong>{t("scm.val.f.totalCost")}</strong> <span className="font-mono font-bold">{formatMoney(selectedLandedCost.landedCost.amount)}</span></div>
                   <div><strong>{t("scm.val.f.method")}</strong> {label(selectedLandedCost.landedCost.allocationMethod)}</div>
                 </div>
                 <DataTable
                   columns={[
                     { header: t("scm.val.h.item"), cell: (r) => itemMap.get(r.itemId)?.name || r.itemId, mobileRole: "title" },
-                    { header: t("scm.val.h.allocatedAmount"), cell: (r) => <span className="font-mono font-bold text-amber-600">+{formatMoney(String(r.allocatedAmount))}</span> },
-                    { header: t("scm.val.h.costPerUnitAdded"), cell: (r) => <span className="font-mono font-bold text-emerald-600">+{formatMoney(String(r.costPerUnitAdded))}</span>, mobileRole: "status" },
+                    { header: t("scm.val.h.allocatedAmount"), cell: (r) => <span className="font-mono font-bold text-amber-600">+{formatMoney(r.allocatedAmount)}</span> },
+                    { header: t("scm.val.h.costPerUnitAdded"), cell: (r) => <span className="font-mono font-bold text-emerald-600">+{formatMoney(r.costPerUnitAdded)}</span>, mobileRole: "status" },
                   ]}
                   rows={selectedLandedCost.allocations}
                   keyOf={(r) => r.id}

@@ -449,6 +449,17 @@ describe("Wave A7 — HSE Advanced", () => {
     expect(res.json().error).toMatch(/no workflow instance/i);
   });
 
+  it("accepts permit validity as full ISO date-times (what the web form sends)", async () => {
+    const res = await post("/hse/advanced/permits", adminToken, {
+      permitTypeCode: "hot_work",
+      title: "Timed permit",
+      validFrom: "2026-03-10T08:00:00.000Z",
+      validTo: "2026-03-10T16:30:00.000Z",
+    });
+    expect(res.statusCode).toBe(201);
+    expect(new Date(res.json().validTo).toISOString()).toBe("2026-03-10T16:30:00.000Z");
+  });
+
   it("rejects a permit whose validity runs backwards", async () => {
     const res = await post("/hse/advanced/permits", adminToken, {
       permitTypeCode: "hot_work",

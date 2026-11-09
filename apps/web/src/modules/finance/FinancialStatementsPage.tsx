@@ -78,6 +78,8 @@ export function FinancialStatementsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // Every keystroke reloads; wait until the date and 3-letter currency are complete.
+    if (!asOfDate || !/^[A-Za-z]{3}$/.test(currency)) return;
     setLoading(true);
     setError(null);
     try {
@@ -279,7 +281,7 @@ export function FinancialStatementsPage() {
                 })}
               </h2>
               <Card className="mb-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("finStmt.stillOpen")}</p>
+                <p className="text-xs font-bold text-ink-faint">{t("finStmt.stillOpen")}</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums text-ink">
                   {formatMoney(aging.totalOpen)}{" "}
                   <span className="text-sm font-normal text-ink-dim">{aging.currency}</span>

@@ -64,7 +64,7 @@ const ROLE_CARDS: Record<string, (b: Record<string, Block>, perms: Set<string>) 
 export function RoleDashboard() {
   const { session } = useAuth();
   const token = session!.accessToken;
-  const { activeRoleCode, navGroups } = useShell();
+  const { activeRoleCode } = useShell();
   const t = useT();
   const [blocks, setBlocks] = useState<Record<string, Block> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,22 +111,22 @@ export function RoleDashboard() {
       {!blocks ? (
         <Spinner />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map((card) =>
             card.to ? (
               <Link
                 key={card.key}
                 to={card.to}
-                className="group flex min-h-[112px] flex-col justify-between rounded-lg border border-line bg-panel p-4 transition-colors hover:border-line-strong hover:bg-panel-2"
+                className="group flex min-h-[84px] flex-col justify-between gap-1 rounded border border-line bg-panel p-3 transition-colors hover:border-line-strong hover:bg-panel-2"
               >
-                <span className="text-sm font-semibold text-ink">{card.label}</span>
-                <span className="text-3xl font-bold text-ink">{card.value}</span>
+                <span className="text-[0.84rem] font-bold text-ink-faint">{card.label}</span>
+                <span className="text-2xl font-semibold tabular-nums text-ink">{card.value}</span>
                 {card.hint && <span className="text-xs text-ink-faint">{card.hint}</span>}
               </Link>
             ) : (
-              <div key={card.key} className="flex min-h-[112px] flex-col justify-between rounded-lg border border-line bg-panel p-4">
-                <span className="text-sm font-semibold text-ink">{card.label}</span>
-                <span className="text-3xl font-bold text-ink">{card.value}</span>
+              <div key={card.key} className="flex min-h-[84px] flex-col justify-between gap-1 rounded border border-line bg-panel p-3">
+                <span className="text-[0.84rem] font-bold text-ink-faint">{card.label}</span>
+                <span className="text-2xl font-semibold tabular-nums text-ink">{card.value}</span>
                 {card.hint && <span className="text-xs text-ink-faint">{card.hint}</span>}
               </div>
             ),

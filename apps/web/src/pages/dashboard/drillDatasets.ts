@@ -90,7 +90,12 @@ export const DRILL_DATASETS: Record<string, DrillDataset> = {
 
   surveys: {
     titleKey: "drilldown.title.surveys",
-    apiCall: (token) => api.surveyAssignments(token),
+    // The API has no status filter here; the dashboard card links with
+    // status=submitted, so narrow the list client-side.
+    apiCall: async (token, params) => {
+      const rows = await api.surveyAssignments(token);
+      return params.status ? rows.filter((r) => r.status === params.status) : rows;
+    },
     columns: [
       { header: "Status", cell: (r) => (r as SurveyAssignment).status, mobileRole: "status" },
       { header: "Type", cell: (r) => (r as SurveyAssignment).respondentType },

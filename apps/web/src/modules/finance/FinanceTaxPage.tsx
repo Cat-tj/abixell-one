@@ -177,7 +177,19 @@ export function FinanceTaxPage() {
   const activeRegistration = registrations.find((r) => r.status === "active") ?? null;
   const selectedRule = rules.find((r) => r.id === selectedRuleId) ?? null;
 
+  function formProblem(kind: "missing" | "invalid", fields: Array<string | null>): boolean {
+    const list = fields.filter((x): x is string => x !== null);
+    if (list.length === 0) return false;
+    setNotice(null);
+    setError(t(kind === "missing" ? "common.form.missing" : "common.form.invalid", { fields: list.join(", ") }));
+    return true;
+  }
+
+  // A comma is accepted as the decimal separator ("0,11" -> "0.11").
+  const decimal = (v: string) => v.trim().replace(",", ".");
+
   async function registerTaxpayer() {
+    if (formProblem("missing", [!registrationFrom ? t("finTax.effectiveFrom") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -199,6 +211,7 @@ export function FinanceTaxPage() {
   }
 
   async function createRule() {
+    if (formProblem("missing", [!ruleCode.trim() ? t("finTax.ruleCode") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -223,13 +236,25 @@ export function FinanceTaxPage() {
 
   async function createVersion() {
     if (!selectedRule) return;
+    if (
+      formProblem("missing", [
+        rate.trim() === "" ? t("finTax.rate") : null,
+        !taxAccountId ? t("finTax.taxAccount") : null,
+        !versionFrom ? t("finTax.effectiveFrom") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formProblem("invalid", [!isValidRateInput(decimal(rate)) ? `${t("finTax.rate")} (${t("finTax.rateHintInvalid")})` : null])) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const created = await api.accountingCreateTaxRuleVersion(token, selectedRule.id, {
         // Verbatim text: a rate is a fraction with at most six decimals.
-        rate: rate.trim(),
+        rate: decimal(rate),
         basis,
         roundingMode,
         requiresPkp,
@@ -265,6 +290,17 @@ export function FinanceTaxPage() {
   }
 
   async function calculate() {
+    if (
+      formProblem("missing", [
+        !calcRuleCode ? t("finTax.ruleCode") : null,
+        calcBasis.trim() === "" ? t("finTax.basisAmount") : null,
+        !calcDate ? t("finTax.calculationDate") : null,
+        !calcCurrency.trim() ? t("fin.common.currency") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formProblem("invalid", [!isValidAmountInput(decimal(calcBasis)) ? t("finTax.basisAmount") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -273,7 +309,7 @@ export function FinanceTaxPage() {
         legalEntityId,
         ruleCode: calcRuleCode.trim().toUpperCase(),
         // Verbatim text at 2 decimals.
-        basisAmount: calcBasis.trim(),
+        basisAmount: decimal(calcBasis),
         calculationDate: calcDate,
         currency: calcCurrency,
         idempotencyKey: newIdempotencyKey(),
@@ -405,7 +441,7 @@ export function FinanceTaxPage() {
               </Field>
             </div>
             <div className="mt-3">
-              <Button disabled={busy || !registrationFrom} onClick={() => void registerTaxpayer()}>
+              <Button disabled={busy} onClick={() => void registerTaxpayer()}>
                 {t("finTax.recordStatus")}
               </Button>
             </div>
@@ -415,7 +451,7 @@ export function FinanceTaxPage() {
             <h2 className="mb-3 text-sm font-semibold text-ink">{t("finTax.taxRule")}</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field label={t("finTax.ruleCode")} required>
-                <Input value={ruleCode} onChange={(e) => setRuleCode(e.target.value)} placeholder="PPN-OUT-11" />
+                <Input value={ruleCode} onChange={(e) => setRuleCode(e.target.value)} placeholder={t("common.form.example", { value: "PPN-OUT-11" })} />
               </Field>
               <Field label={t("finTax.taxType")} required>
                 <Select value={taxType} onChange={(e) => setTaxType(e.target.value as AccountingTaxRuleRecord["taxType"])}>
@@ -431,7 +467,7 @@ export function FinanceTaxPage() {
               </Field>
             </div>
             <div className="mt-3">
-              <Button disabled={busy || !ruleCode.trim()} onClick={() => void createRule()}>
+              <Button disabled={busy} onClick={() => void createRule()}>
                 {t("finTax.createRule")}
               </Button>
             </div>
@@ -454,14 +490,14 @@ export function FinanceTaxPage() {
                   <Field
                     label={t("finTax.rate")}
                     required
-                    hint={rate && !isValidRateInput(rate) ? t("finTax.rateHintInvalid") : t("finTax.rateHint")}
+                    hint={rate && !isValidRateInput(decimal(rate)) ? t("finTax.rateHintInvalid") : t("finTax.rateHint")}
                   >
                     <Input
                       inputMode="decimal"
                       value={rate}
                       onChange={(e) => setRate(e.target.value)}
-                      placeholder="0.110000"
-                      aria-invalid={rate !== "" && !isValidRateInput(rate)}
+                      placeholder={t("common.form.example", { value: "0.110000" })}
+                      aria-invalid={rate !== "" && !isValidRateInput(decimal(rate))}
                     />
                   </Field>
                   <Field label={t("finTax.basis")} required hint={t("finTax.basisHint")}>
@@ -504,7 +540,7 @@ export function FinanceTaxPage() {
                 </div>
                 <div className="mt-3">
                   <Button
-                    disabled={busy || !selectedRule || !isValidRateInput(rate) || !taxAccountId || !versionFrom}
+                    disabled={busy || !selectedRule}
                     onClick={() => void createVersion()}
                   >
                     {t("finBudget.draftVersion")}
@@ -545,14 +581,14 @@ export function FinanceTaxPage() {
               <Field
                 label={t("finTax.basisAmount")}
                 required
-                hint={calcBasis && !isValidAmountInput(calcBasis) ? t("finTax.basisAmountHint") : undefined}
+                hint={calcBasis && !isValidAmountInput(decimal(calcBasis)) ? t("finTax.basisAmountHint") : undefined}
               >
                 <Input
                   inputMode="decimal"
                   value={calcBasis}
                   onChange={(e) => setCalcBasis(e.target.value)}
-                  placeholder="1000000.00"
-                  aria-invalid={calcBasis !== "" && !isValidAmountInput(calcBasis)}
+                  placeholder={t("common.form.example", { value: "1000000.00" })}
+                  aria-invalid={calcBasis !== "" && !isValidAmountInput(decimal(calcBasis))}
                 />
               </Field>
               <Field label={t("finTax.calculationDate")} required>
@@ -564,7 +600,7 @@ export function FinanceTaxPage() {
             </div>
             <div className="mt-3">
               <Button
-                disabled={busy || !calcRuleCode || !isValidAmountInput(calcBasis) || !calcDate}
+                disabled={busy}
                 onClick={() => void calculate()}
               >
                 {t("finTax.calculate")}

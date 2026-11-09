@@ -669,7 +669,7 @@ export function SurveyDetailPage() {
 
               {isDraft && canManage && (
                 <form onSubmit={addQuestion} className="mt-6 space-y-3 border-t border-line pt-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                  <h3 className="text-xs font-semiboldr text-ink-faint">
                     {t("surveyDetail.addQuestion")}
                   </h3>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -778,7 +778,7 @@ export function SurveyDetailPage() {
 
           {isDraft && canManage && (
             <form onSubmit={addSection} className="space-y-3 border-t border-line pt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              <h3 className="text-xs font-semiboldr text-ink-faint">
                 {t("surveyDetail.addSection")}
               </h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -827,7 +827,7 @@ export function SurveyDetailPage() {
 
           {isDraft && canManage && (
             <form onSubmit={addBranchingRule} className="space-y-3 border-t border-line pt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              <h3 className="text-xs font-semiboldr text-ink-faint">
                 {t("surveyDetail.addBranching")}
               </h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -991,7 +991,7 @@ export function SurveyDetailPage() {
 
           {canManage && (
             <form onSubmit={createToken} className="space-y-3 border-t border-line pt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              <h3 className="text-xs font-semiboldr text-ink-faint">
                 {t("surveyDetail.mintToken")}
               </h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -1056,7 +1056,7 @@ export function SurveyDetailPage() {
 
           {isDraft && canManage && (
             <form onSubmit={addTranslation} className="space-y-3 border-t border-line pt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              <h3 className="text-xs font-semiboldr text-ink-faint">
                 {t("surveyDetail.upsertTranslation")}
               </h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -1107,19 +1107,19 @@ export function SurveyDetailPage() {
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
-                  <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("surveyDetail.completionRate")}</p>
+                  <p className="text-xs font-bold text-ink-faint">{t("surveyDetail.completionRate")}</p>
                   <p className="mt-1 text-2xl font-bold text-ink">{analyticsOverview.completionRatePercent}%</p>
                 </Card>
                 <Card>
-                  <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("surveyDetail.totalAssignments")}</p>
+                  <p className="text-xs font-bold text-ink-faint">{t("surveyDetail.totalAssignments")}</p>
                   <p className="mt-1 text-2xl font-bold text-ink">{analyticsOverview.totalAssignments}</p>
                 </Card>
                 <Card>
-                  <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("surveyDetail.submittedResponses")}</p>
+                  <p className="text-xs font-bold text-ink-faint">{t("surveyDetail.submittedResponses")}</p>
                   <p className="mt-1 text-2xl font-bold text-ink">{analyticsOverview.submittedCount}</p>
                 </Card>
                 <Card>
-                  <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">{t("surveyDetail.averageScore")}</p>
+                  <p className="text-xs font-bold text-ink-faint">{t("surveyDetail.averageScore")}</p>
                   <p className="mt-1 text-2xl font-bold text-ink">
                     {analyticsOverview.averageScore ?? t("surveyDetail.notAvailable")}
                   </p>
@@ -1137,21 +1137,21 @@ export function SurveyDetailPage() {
                   <h3 className="text-sm font-semibold text-ink mb-3">{t("surveyDetail.npsTitle")}</h3>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 items-center">
                     <div className="text-center p-4 bg-panel-2 rounded">
-                      <p className="text-xs text-ink-faint uppercase">{t("surveyDetail.npsScore")}</p>
+                      <p className="text-xs text-ink-faint">{t("surveyDetail.npsScore")}</p>
                       <p className="text-3xl font-extrabold text-ink">
                         {analyticsOverview.nps.netPromoterScore ?? t("surveyDetail.notAvailable")}
                       </p>
                     </div>
                     <div className="text-center p-4 bg-status-ok-soft rounded">
-                      <p className="text-xs text-status-ok uppercase">{t("surveyDetail.promoters")}</p>
+                      <p className="text-xs text-status-ok">{t("surveyDetail.promoters")}</p>
                       <p className="text-xl font-bold text-status-ok">{analyticsOverview.nps.promoterCount}</p>
                     </div>
                     <div className="text-center p-4 bg-status-warn-soft rounded">
-                      <p className="text-xs text-status-warn uppercase">{t("surveyDetail.passives")}</p>
+                      <p className="text-xs text-status-warn">{t("surveyDetail.passives")}</p>
                       <p className="text-xl font-bold text-status-warn">{analyticsOverview.nps.passiveCount}</p>
                     </div>
                     <div className="text-center p-4 bg-status-danger-soft rounded">
-                      <p className="text-xs text-status-danger uppercase">{t("surveyDetail.detractors")}</p>
+                      <p className="text-xs text-status-danger">{t("surveyDetail.detractors")}</p>
                       <p className="text-xl font-bold text-status-danger">{analyticsOverview.nps.detractorCount}</p>
                     </div>
                   </div>

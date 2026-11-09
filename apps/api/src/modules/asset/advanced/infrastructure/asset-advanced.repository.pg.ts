@@ -555,6 +555,16 @@ export class PgAssetAdvancedRepository implements AssetAdvancedRepository {
     return r.rowCount! > 0;
   }
 
+  /** The asset's responsible Organization Unit (Asset Core's Data Scope anchor),
+   * or null when the asset is unplaced / not found. */
+  async findAssetOrganizationUnitId(tenantId: string, assetId: string): Promise<string | null> {
+    const r = await this.pool.query(
+      `SELECT organization_unit_id FROM assets WHERE id = $1 AND tenant_id = $2`,
+      [assetId, tenantId],
+    );
+    return r.rows.length > 0 ? ((r.rows[0].organization_unit_id as string | null) ?? null) : null;
+  }
+
   /** Asset Advanced never imports SupplyChainService — see module boundary
    * convention (Asset's own `siteExists`/`organizationUnitExists`). */
   async itemExists(tenantId: string, itemId: string): Promise<boolean> {

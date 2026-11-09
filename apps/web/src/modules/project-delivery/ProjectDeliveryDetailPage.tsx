@@ -74,19 +74,30 @@ export function ProjectDeliveryDetailPage() {
   }, [load]);
 
   async function createActivity() {
-    if (!projectId || !activityTitle) return;
+    if (!projectId) return;
+    const missing = [
+      !activityTitle.trim() ? t("pd.detail.f.title") : null,
+      !activityPicUserId.trim() && !activityPicEmployeeId.trim()
+        ? `${t("pd.detail.f.picUserId")} / ${t("pd.detail.f.picEmployeeId")}`
+        : null,
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) {
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       await api.createProjectDeliveryActivity(token, projectId, {
-        title: activityTitle,
+        title: activityTitle.trim(),
         description: activityDescription || null,
-        picUserId: activityPicUserId || null,
-        picEmployeeId: activityPicEmployeeId || null,
+        picUserId: activityPicUserId.trim() || null,
+        picEmployeeId: activityPicEmployeeId.trim() || null,
         plannedStartDate: activityStart || null,
         plannedEndDate: activityEnd || null,
         status: activityStatus as ProjectDeliveryActivity["status"],
-        progressPercent: activityProgress,
+        // API wants a whole 0-100; a blank or fractional field must not 400.
+        progressPercent: Math.min(100, Math.max(0, Math.round(activityProgress || 0))),
       });
       setActivityTitle("");
       setActivityStatus("planned");
@@ -118,12 +129,16 @@ export function ProjectDeliveryDetailPage() {
   }
 
   async function createMilestone() {
-    if (!projectId || !milestoneTitle) return;
+    if (!projectId) return;
+    if (!milestoneTitle.trim()) {
+      setError(t("common.form.missing", { fields: t("pd.detail.f.title") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       await api.createProjectDeliveryMilestone(token, projectId, {
-        title: milestoneTitle,
+        title: milestoneTitle.trim(),
         description: milestoneDescription || null,
         plannedDate: milestoneDate || null,
       });
@@ -268,7 +283,7 @@ export function ProjectDeliveryDetailPage() {
               </Field>
               <Field label={t("pd.detail.f.progress")}><Input type="number" min={0} max={100} value={activityProgress} onChange={(e) => setActivityProgress(Number(e.target.value))} disabled={busy} /></Field>
             </div>
-            <Button disabled={busy || !activityTitle || (!activityPicUserId && !activityPicEmployeeId)} onClick={() => void createActivity()}>{t("pd.detail.t.addActivity")}</Button>
+            <Button disabled={busy} onClick={() => void createActivity()}>{t("pd.detail.t.addActivity")}</Button>
           </div>
         </Card>
 
@@ -278,7 +293,7 @@ export function ProjectDeliveryDetailPage() {
             <Field label={t("pd.detail.f.title")} required><Input value={milestoneTitle} onChange={(e) => setMilestoneTitle(e.target.value)} disabled={busy} /></Field>
             <Field label={t("pd.detail.f.description")}><Textarea rows={2} value={milestoneDescription} onChange={(e) => setMilestoneDescription(e.target.value)} disabled={busy} /></Field>
             <Field label={t("pd.detail.f.plannedDate")}><Input type="date" value={milestoneDate} onChange={(e) => setMilestoneDate(e.target.value)} disabled={busy} /></Field>
-            <Button disabled={busy || !milestoneTitle} onClick={() => void createMilestone()}>{t("pd.detail.t.addMilestone")}</Button>
+            <Button disabled={busy} onClick={() => void createMilestone()}>{t("pd.detail.t.addMilestone")}</Button>
           </div>
         </Card>
       </div>

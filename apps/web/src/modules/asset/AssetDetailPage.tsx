@@ -133,7 +133,7 @@ export function AssetDetailPage() {
     })();
   }, [token]);
 
-  async function run(action: () => Promise<unknown>, successMessage: string) {
+  async function run(action: () => Promise<unknown>, successMessage: string): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -141,11 +141,21 @@ export function AssetDetailPage() {
       await action();
       setNotice(successMessage);
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("ast.detail.msg.actionFailed"));
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Shows a form message (and clears any success notice); always returns false. */
+  function reject(message: string): false {
+    setNotice(null);
+    setError(message);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
   }
 
   const unitName = (id: string | null) => (id ? (units.find((u) => u.id === id)?.name ?? "—") : "—");
@@ -241,19 +251,23 @@ export function AssetDetailPage() {
         <div className="mt-3">
           <Button
             disabled={busy}
-            onClick={() =>
-              run(
+            onClick={() => {
+              if (!name.trim()) {
+                reject(t("common.form.missing", { fields: t("ast.detail.f.name") }));
+                return;
+              }
+              void run(
                 () =>
                   api.updateAsset(token, asset.id, {
-                    name,
+                    name: name.trim(),
                     assetTag: assetTag || null,
                     category: category || null,
                     description: description || null,
                     acquisitionReference: acquisitionReference || null,
                   }),
                 "Asset details updated.",
-              )
-            }
+              );
+            }}
           >
             Save details
           </Button>
@@ -317,7 +331,7 @@ export function AssetDetailPage() {
 
         {!isTerminal && !pendingMovement ? (
           <>
-            <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("ast.detail.t.moveThisAsset")}</h3>
+            <h3 className="mb-2 mt-4 text-xs font-bold text-slate-500">{t("ast.detail.t.moveThisAsset")}</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field label={t("ast.detail.f.responsibleUnit")}>
                 <Select value={moveUnit} onChange={(e) => setMoveUnit(e.target.value)}>
@@ -379,9 +393,13 @@ export function AssetDetailPage() {
             </div>
             <div className="mt-3">
               <Button
-                disabled={busy || (!moveUnit && !moveCustodian && !moveSite && !moveProject && !moveLocationDetail)}
+                disabled={busy}
                 onClick={async () => {
-                  await run(async () => {
+                  if (!moveUnit && !moveCustodian && !moveSite && !moveProject && !moveLocationDetail.trim()) {
+                    reject(t("ast.detail.msg.moveNeedsChange"));
+                    return;
+                  }
+                  const ok = await run(async () => {
                     // Only the fields the user actually chose are sent —
                     // an omitted field keeps its current value.
                     const body: Record<string, string> = {};
@@ -389,11 +407,12 @@ export function AssetDetailPage() {
                     if (moveCustodian) body.custodianEmployeeId = moveCustodian;
                     if (moveSite) body.siteId = moveSite;
                     if (moveProject) body.projectId = moveProject;
-                    if (moveLocationDetail) body.locationDetail = moveLocationDetail;
+                    if (moveLocationDetail.trim()) body.locationDetail = moveLocationDetail.trim();
                     if (moveReason) body.reason = moveReason;
                     if (moveEffectiveDate) body.effectiveDate = moveEffectiveDate;
                     return api.moveAsset(token, asset.id, body);
                   }, "Movement recorded.");
+                  if (!ok) return;
                   setMoveUnit("");
                   setMoveCustodian("");
                   setMoveSite("");
@@ -407,7 +426,7 @@ export function AssetDetailPage() {
               </Button>
             </div>
 
-            <h3 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("ast.detail.t.changeStatus")}</h3>
+            <h3 className="mb-2 mt-6 text-xs font-bold text-slate-500">{t("ast.detail.t.changeStatus")}</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field label={t("ast.detail.f.newStatus")}>
                 <Select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
@@ -476,9 +495,13 @@ export function AssetDetailPage() {
           </div>
           <div className="mt-3">
             <Button
-              disabled={busy || !confirmRetirement}
+              disabled={busy}
               onClick={async () => {
-                await run(
+                if (!confirmRetirement) {
+                  reject(t("ast.detail.msg.confirmRetire"));
+                  return;
+                }
+                const ok = await run(
                   () =>
                     api.retireAsset(token, asset.id, {
                       status: retirementStatus,
@@ -486,6 +509,7 @@ export function AssetDetailPage() {
                     }),
                   "Asset retired.",
                 );
+                if (!ok) return;
                 setConfirmRetirement(false);
                 setRetirementReason("");
               }}

@@ -655,6 +655,8 @@ export class HseAdvancedService {
       const { instance } = await this.workflow.startInstance(actor, {
         definitionCode: HSE_PERMIT_WORKFLOW_DEFINITION_CODE,
         entityId: permit.id,
+        // ADR-0012: the permit's owning Organization Unit (site-scoped read visibility).
+        contextData: { organizationUnitId: permit.organizationUnitId },
       });
       instanceId = instance.id;
     } catch (err) {

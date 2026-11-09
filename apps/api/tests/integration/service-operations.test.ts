@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app.js";
+import { workOrderUsesContractPricing } from "../../src/modules/service-operations/core/domain/service-operations.entity.js";
 import { pool } from "../../src/infrastructure/persistence/db.js";
 import { activateAllModules, authHeader, bootstrapTenant, createReadOnlyRole, login, provisionFirstAdmin } from "./helpers.js";
 
@@ -566,6 +567,67 @@ describe("Phase 2 — Service Operations & Work Management Core", () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  describe("WO type — regular vs back_charge", () => {
+    it("defaults to regular and keeps the contract link", async () => {
+      const code = `WOT-${Date.now()}`;
+      const c = await pool.query(
+        `INSERT INTO contracts (tenant_id, customer_id, code, name) VALUES ($1,$2,$3,'WO type contract') RETURNING id`,
+        [tenantId, customerAId, code],
+      );
+      const contractId = c.rows[0].id as string;
+      const plain = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Default type",
+      });
+      expect(plain.statusCode).toBe(201);
+      expect(plain.json().woType).toBe("regular");
+      const withContract = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Regular with contract",
+        contractId,
+        woType: "regular",
+      });
+      expect(withContract.statusCode).toBe(201);
+      expect(withContract.json().woType).toBe("regular");
+      expect(withContract.json().contractId).toBe(contractId);
+      expect(workOrderUsesContractPricing(withContract.json())).toBe(true);
+      const detail = await get(`/work-orders/${withContract.json().id}`, coordinatorToken);
+      expect(detail.json().workOrder.woType).toBe("regular");
+    });
+
+    it("creates a back_charge WO that skips contract pricing and rejects a contract", async () => {
+      const bc = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Back charge",
+        woType: "back_charge",
+      });
+      expect(bc.statusCode).toBe(201);
+      expect(bc.json().woType).toBe("back_charge");
+      expect(bc.json().contractId).toBeNull();
+      expect(workOrderUsesContractPricing(bc.json())).toBe(false);
+
+      const bad = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Back charge with contract",
+        woType: "back_charge",
+        contractId: "00000000-0000-4000-8000-000000000001",
+      });
+      expect(bad.statusCode).toBe(400);
+
+      const invalid = await post("/work-orders", coordinatorToken, {
+        customerId: customerAId,
+        serviceDefinitionCode: SERVICE_CODE,
+        title: "Bad type",
+        woType: "other",
+      });
+      expect(invalid.statusCode).toBe(400);
+    });
+  });
+
   describe("SO-CORE-016 — Work Order Serving Phase", () => {
     it("recordServingLog: accepted WO receives meal serving event", async () => {
       const wo = await post("/work-orders", coordinatorToken, {
@@ -596,6 +658,11 @@ describe("Phase 2 — Service Operations & Work Management Core", () => {
       const accepted = await post(`/work-orders/${workOrderId}/customer-accept`, verifierToken, {});
       expect(accepted.statusCode).toBe(200);
 
+      // Nothing recorded yet: a normal state, answered as { servingLog: null }.
+      const none = await get(`/work-orders/${workOrderId}/serving`, coordinatorToken);
+      expect(none.statusCode).toBe(200);
+      expect(none.json()).toEqual({ servingLog: null });
+
       // Record a serving event: meals received, served, returned, wasted.
       const serving = await post(`/work-orders/${workOrderId}/serving`, coordinatorToken, {
         mealDate: "2026-10-30",
@@ -613,6 +680,11 @@ describe("Phase 2 — Service Operations & Work Management Core", () => {
       expect(serving.json().servingLog.servingNumber).toMatch(/^SRV-/);
       expect(serving.json().servingLog.remainingQty).toBe("0.0000"); // 100 - 95 - 3 - 2
       expect(serving.json().workOrder.servingRecordedAt).toBeTruthy();
+
+      // GET answers with the same { servingLog } envelope the web reads.
+      const read = await get(`/work-orders/${workOrderId}/serving`, coordinatorToken);
+      expect(read.statusCode).toBe(200);
+      expect(read.json().servingLog.servingNumber).toBe(serving.json().servingLog.servingNumber);
     });
   });
 

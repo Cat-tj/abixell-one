@@ -28,6 +28,7 @@ import {
   type Column,
 } from "../../shell/components/ui";
 import { formatDateShort, formatMoney } from "../../shared/format";
+import { localDateInputValue } from "../../shared/localDateTime";
 
 function label(v: string) {
   return v.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -64,11 +65,11 @@ export function SupplierContractsPage() {
   // Form states - Contract
   const [ctrSuppId, setCtrSuppId] = useState("");
   const [ctrTitle, setCtrTitle] = useState("");
-  const [ctrStart, setCtrStart] = useState(() => new Date().toISOString().slice(0, 10));
+  const [ctrStart, setCtrStart] = useState(() => localDateInputValue());
   const [ctrEnd, setCtrEnd] = useState(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() + 1);
-    return d.toISOString().slice(0, 10);
+    return localDateInputValue(d);
   });
   const [ctrCommitment, setCtrCommitment] = useState("500000000");
   const [ctrTerms, setCtrTerms] = useState("Annual master service & goods agreement");
@@ -190,8 +191,8 @@ export function SupplierContractsPage() {
     { header: t("scm.supplier.h.supplier"), cell: (c) => suppMap.get(c.supplierId)?.name || c.supplierId },
     { header: t("scm.supplier.h.contractTitle"), cell: (c) => c.title },
     { header: t("scm.supplier.h.validityPeriod"), cell: (c) => `${formatDateShort(c.startDate)} – ${formatDateShort(c.endDate)}` },
-    { header: t("scm.supplier.h.committedAmount"), cell: (c) => <span className="font-mono font-bold text-slate-800">{formatMoney(String(c.committedAmount))}</span> },
-    { header: t("scm.supplier.h.consumedSpend"), cell: (c) => <span className="font-mono text-emerald-600">{formatMoney(String(c.spentAmount))}</span> },
+    { header: t("scm.supplier.h.committedAmount"), cell: (c) => <span className="font-mono font-bold text-slate-800">{formatMoney(c.committedAmount)}</span> },
+    { header: t("scm.supplier.h.consumedSpend"), cell: (c) => <span className="font-mono text-emerald-600">{formatMoney(c.spentAmount)}</span> },
     { header: t("scm.supplier.h.status"), cell: (c) => <StatusPill tone={c.status === "active" ? "success" : c.status === "draft" ? "warning" : "neutral"}>{label(c.status)}</StatusPill>, mobileRole: "status" },
     {
       header: t("scm.supplier.h.actions"),

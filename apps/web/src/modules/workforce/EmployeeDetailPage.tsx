@@ -103,6 +103,23 @@ export function EmployeeDetailPage() {
     void load();
   }, [load]);
 
+  // Reports missing/invalid fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>, invalid: Array<[boolean, string]> = []): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return false;
+    }
+    const bad = invalid.filter(([isBad]) => isBad).map(([, label]) => label);
+    if (bad.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: bad.join(", ") }));
+      return false;
+    }
+    return true;
+  }
+
   async function run(action: () => Promise<unknown>, successMessage: string) {
     setBusy(true);
     setError(null);
@@ -116,6 +133,23 @@ export function EmployeeDetailPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveProfile() {
+    if (!detail) return;
+    if (!requireFields(
+      [[fullName.trim(), t("mw.empd.f.fullName")]],
+      [[email.trim() !== "" && !/^\S+@\S+\.\S+$/.test(email.trim()), t("mw.empd.f.email")]],
+    )) return;
+    await run(
+      () =>
+        api.updateEmployeeProfile(token, detail.employee.id, {
+          fullName: fullName.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+        }),
+      "Profile updated.",
+    );
   }
 
   if (loading) return <Spinner />;
@@ -150,17 +184,7 @@ export function EmployeeDetailPage() {
         <div className="mt-3">
           <Button
             disabled={busy}
-            onClick={() =>
-              run(
-                () =>
-                  api.updateEmployeeProfile(token, employee.id, {
-                    fullName,
-                    email: email || null,
-                    phone: phone || null,
-                  }),
-                "Profile updated.",
-              )
-            }
+            onClick={() => void saveProfile()}
           >
             Save profile
           </Button>
@@ -184,7 +208,7 @@ export function EmployeeDetailPage() {
           </div>
         </dl>
 
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("mw.empd.t.recordAPlacementChange")}</h3>
+        <h3 className="mb-2 text-xs font-bold text-slate-500">{t("mw.empd.t.recordAPlacementChange")}</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label={t("mw.empd.f.organizationUnit")}>
             <Select value={newUnit} onChange={(e) => setNewUnit(e.target.value)}>

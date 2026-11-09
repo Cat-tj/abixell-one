@@ -96,7 +96,14 @@ export function RoleSiteSelectionPage() {
   }
 
   async function handleContinue() {
-    if (!assignmentId || !token) return;
+    if (!token) return;
+    if (!assignmentId) {
+      setError(
+        t("common.form.missing", { fields: `${t("selectRole.role")}, ${t("selectRole.site")}` }),
+      );
+      return;
+    }
+    setError(null);
     // Epic 1 (§4.1 C): the choice is written to the session server-side.
     // Skipping the call when the server already has this assignment active
     // (single-Role users) is a round-trip saved, not an authority decision.
@@ -163,7 +170,7 @@ export function RoleSiteSelectionPage() {
 
             <Button
               className="min-h-[44px] w-full"
-              disabled={!assignmentId || pending}
+              disabled={pending}
               onClick={() => void handleContinue()}
             >
               {pending ? t("selectRole.pending") : t("selectRole.continue")}

@@ -288,7 +288,7 @@ describe("WP-FIN-A6-06b — Consolidation", () => {
     const workflow = {
       startInstance: async (
         _actor: ActorContext,
-        input: { entityId: string; definitionCode: string },
+        input: { entityId: string; definitionCode: string; contextData?: unknown },
       ) => {
         const def = await pool.query(
           `SELECT d.id AS definition_id, v.id AS version_id, s.id AS step_id
@@ -303,8 +303,8 @@ describe("WP-FIN-A6-06b — Consolidation", () => {
           `INSERT INTO workflow_instances
              (tenant_id, workflow_definition_id, workflow_version_id, entity_type, entity_id,
               current_step_id, context_data, started_by)
-           VALUES ($1,$2,$3,$4,$5,$6,'{}'::jsonb,$7) RETURNING id`,
-          [tenantId, row.definition_id, row.version_id, input.definitionCode, input.entityId, row.step_id, userId],
+           VALUES ($1,$2,$3,$4,$5,$6,$8::jsonb,$7) RETURNING id`,
+          [tenantId, row.definition_id, row.version_id, input.definitionCode, input.entityId, row.step_id, userId, JSON.stringify(input.contextData ?? {})],
         );
         return { instance: { id: r.rows[0].id } };
       },
@@ -589,6 +589,21 @@ describe("WP-FIN-A6-06b — Consolidation", () => {
       expect(group.status).toBe("draft");
       expect(group.workflowInstanceId).toBeTruthy();
       expect(group.reportingCurrency).toBe("IDR");
+    });
+
+    it("leaves the Instance unstamped: a consolidation group is tenant-level (no owning unit / Legal Entity)", async () => {
+      const configure = await actorWith(["finance.accounting.configure"]);
+      const group = await service.createGroup(configure, {
+        groupCode: "GRP-TENANT-LEVEL",
+        name: "Tenant-level Group",
+        reportingCurrency: "IDR",
+      });
+      const r = await pool.query(`SELECT context_data FROM workflow_instances WHERE id = $1`, [
+        group.workflowInstanceId,
+      ]);
+      expect(r.rows[0].context_data.organizationUnitId).toBeUndefined();
+      expect(r.rows[0].context_data.legalEntityId).toBeUndefined();
+      expect(r.rows[0].context_data.groupCode).toBe("GRP-TENANT-LEVEL");
     });
 
     it("refuses a reporting currency that is not a 3-letter ISO code", async () => {
