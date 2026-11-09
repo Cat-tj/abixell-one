@@ -116,13 +116,18 @@ export function AssetsPage() {
     id ? (custodians.find((c) => c.id === id)?.fullName ?? "—") : "—";
 
   async function createAsset() {
+    if (!name.trim()) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: t("ast.list.f.name") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const created = await api.createAsset(token, {
-        name,
-        assetTag: assetTag || null,
+        name: name.trim(),
+        assetTag: assetTag.trim() || null,
         category: category || null,
         organizationUnitId: unitId || null,
         custodianEmployeeId: custodianId || null,
@@ -235,7 +240,7 @@ export function AssetsPage() {
             <Input type="date" value={acquiredAt} onChange={(e) => setAcquiredAt(e.target.value)} />
           </Field>
           <div className="flex items-end">
-            <Button disabled={busy || !name} onClick={() => void createAsset()}>
+            <Button disabled={busy} onClick={() => void createAsset()}>
               Register
             </Button>
           </div>

@@ -133,7 +133,7 @@ export function AssetDetailPage() {
     })();
   }, [token]);
 
-  async function run(action: () => Promise<unknown>, successMessage: string) {
+  async function run(action: () => Promise<unknown>, successMessage: string): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -141,11 +141,21 @@ export function AssetDetailPage() {
       await action();
       setNotice(successMessage);
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("ast.detail.msg.actionFailed"));
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Shows a form message (and clears any success notice); always returns false. */
+  function reject(message: string): false {
+    setNotice(null);
+    setError(message);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
   }
 
   const unitName = (id: string | null) => (id ? (units.find((u) => u.id === id)?.name ?? "—") : "—");
@@ -240,20 +250,24 @@ export function AssetDetailPage() {
         </dl>
         <div className="mt-3">
           <Button
-            disabled={busy || !name.trim()}
-            onClick={() =>
-              run(
+            disabled={busy}
+            onClick={() => {
+              if (!name.trim()) {
+                reject(t("common.form.missing", { fields: t("ast.detail.f.name") }));
+                return;
+              }
+              void run(
                 () =>
                   api.updateAsset(token, asset.id, {
-                    name,
+                    name: name.trim(),
                     assetTag: assetTag || null,
                     category: category || null,
                     description: description || null,
                     acquisitionReference: acquisitionReference || null,
                   }),
                 "Asset details updated.",
-              )
-            }
+              );
+            }}
           >
             Save details
           </Button>
@@ -379,9 +393,13 @@ export function AssetDetailPage() {
             </div>
             <div className="mt-3">
               <Button
-                disabled={busy || (!moveUnit && !moveCustodian && !moveSite && !moveProject && !moveLocationDetail)}
+                disabled={busy}
                 onClick={async () => {
-                  await run(async () => {
+                  if (!moveUnit && !moveCustodian && !moveSite && !moveProject && !moveLocationDetail.trim()) {
+                    reject(t("ast.detail.msg.moveNeedsChange"));
+                    return;
+                  }
+                  const ok = await run(async () => {
                     // Only the fields the user actually chose are sent —
                     // an omitted field keeps its current value.
                     const body: Record<string, string> = {};
@@ -389,11 +407,12 @@ export function AssetDetailPage() {
                     if (moveCustodian) body.custodianEmployeeId = moveCustodian;
                     if (moveSite) body.siteId = moveSite;
                     if (moveProject) body.projectId = moveProject;
-                    if (moveLocationDetail) body.locationDetail = moveLocationDetail;
+                    if (moveLocationDetail.trim()) body.locationDetail = moveLocationDetail.trim();
                     if (moveReason) body.reason = moveReason;
                     if (moveEffectiveDate) body.effectiveDate = moveEffectiveDate;
                     return api.moveAsset(token, asset.id, body);
                   }, "Movement recorded.");
+                  if (!ok) return;
                   setMoveUnit("");
                   setMoveCustodian("");
                   setMoveSite("");
@@ -476,9 +495,13 @@ export function AssetDetailPage() {
           </div>
           <div className="mt-3">
             <Button
-              disabled={busy || !confirmRetirement}
+              disabled={busy}
               onClick={async () => {
-                await run(
+                if (!confirmRetirement) {
+                  reject(t("ast.detail.msg.confirmRetire"));
+                  return;
+                }
+                const ok = await run(
                   () =>
                     api.retireAsset(token, asset.id, {
                       status: retirementStatus,
@@ -486,6 +509,7 @@ export function AssetDetailPage() {
                     }),
                   "Asset retired.",
                 );
+                if (!ok) return;
                 setConfirmRetirement(false);
                 setRetirementReason("");
               }}

@@ -43,6 +43,8 @@ const COST_TYPES: WorkOrderCostType[] = ["material", "labor", "overhead"];
 import { formatDate, formatDateShort, formatMoney, statusTone } from "../../shared/format";
 
 const COST_AMOUNT_RE = /^\d{1,14}(\.\d{1,4})?$/;
+/** Accept "12,5" as "12.5" and drop stray spaces. */
+const dec = (v: string) => v.replace(/\s/g, "").replace(",", ".");
 
 /** Percentage typed by the user ("15", "11,5") -> API fraction string ("0.15").
  * Done on the digit string so no float rounding sneaks in. Returns null when
@@ -223,6 +225,21 @@ export function WorkOrderDetailPage() {
     }
   }
 
+  /** Returns true when the form is complete; otherwise shows what is missing/invalid and returns false. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
   if (loading) return <Spinner />;
   if (!detail) return <Alert tone="error">{error ?? t("mo.wod.msg.notFound")}</Alert>;
 
@@ -325,8 +342,11 @@ export function WorkOrderDetailPage() {
           </Field>
           <div className="flex items-end">
             <Button
-              disabled={busy || !assigneeUserId}
-              onClick={() => run(() => api.assignWorkOrder(token, workOrder.id, assigneeUserId), t("mo.wod.msg.assigned"))}
+              disabled={busy}
+              onClick={() => {
+                if (!formOk([assigneeUserId ? null : t("mo.wod.f.assignToUserId")])) return;
+                void run(() => api.assignWorkOrder(token, workOrder.id, assigneeUserId), t("mo.wod.msg.assigned"));
+              }}
             >
               {t("mo.wod.act.assign")}
             </Button>
@@ -337,13 +357,14 @@ export function WorkOrderDetailPage() {
           <div className="flex items-end">
             <Button
               variant="secondary"
-              disabled={busy || !dueAt}
-              onClick={() =>
-                run(
+              disabled={busy}
+              onClick={() => {
+                if (!formOk([dueAt ? null : t("mo.wod.f.dueDate")])) return;
+                void run(
                   () => api.scheduleWorkOrder(token, workOrder.id, { dueAt: new Date(dueAt).toISOString() }),
                   t("mo.wod.msg.scheduleUpdated"),
-                )
-              }
+                );
+              }}
             >
               {t("mo.wod.act.setSchedule")}
             </Button>
@@ -463,9 +484,16 @@ export function WorkOrderDetailPage() {
             </Field>
             <div className="flex items-end">
               <Button
-                disabled={busy || !servingForm.mealDate || !servingForm.openingTime}
-                onClick={() =>
-                  run(
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    !formOk([
+                      servingForm.mealDate ? null : t("mo.wod.f.mealDate"),
+                      servingForm.openingTime ? null : t("mo.wod.f.openingTime"),
+                    ])
+                  )
+                    return;
+                  void run(
                     () =>
                       api.recordServingLog(token, workOrder.id, {
                         ...servingForm,
@@ -474,8 +502,8 @@ export function WorkOrderDetailPage() {
                         servingSupervisorUserId: servingForm.servingSupervisorUserId || null,
                       }),
                     t("mo.wod.msg.servingRecorded"),
-                  )
-                }
+                  );
+                }}
               >
                 {t("mo.wod.act.recordServing")}
               </Button>
@@ -565,12 +593,18 @@ export function WorkOrderDetailPage() {
                 <div className="flex items-end">
                   <Button
                     variant="secondary"
-                    disabled={busy || !/^\d{1,3}$/.test(acceptDays) || Number(acceptDays) < 1 || Number(acceptDays) > 365}
-                    onClick={() =>
-                      run(async () => {
-                        setIssuedLink(await api.issueWorkOrderAcceptanceToken(token, workOrder.id, Number(acceptDays)));
-                      }, t("mo.wod.msg.linkIssued"))
-                    }
+                    disabled={busy}
+                    onClick={() => {
+                      const days = Number(acceptDays.replace(/\D/g, ""));
+                      if (acceptDays.replace(/\D/g, "") === "") {
+                        formOk([t("mo.wod.f.linkValidDays")]);
+                        return;
+                      }
+                      if (!formOk([], [days >= 1 && days <= 365 ? null : t("mo.wod.f.linkValidDays")])) return;
+                      void run(async () => {
+                        setIssuedLink(await api.issueWorkOrderAcceptanceToken(token, workOrder.id, days));
+                      }, t("mo.wod.msg.linkIssued"));
+                    }}
                   >
                     {t("mo.wod.act.issueLink")}
                   </Button>
@@ -613,13 +647,14 @@ export function WorkOrderDetailPage() {
                   </Field>
                   <Button
                     variant="secondary"
-                    disabled={busy || !rejectReason.trim()}
-                    onClick={() =>
-                      run(
+                    disabled={busy}
+                    onClick={() => {
+                      if (!formOk([rejectReason.trim() ? null : t("mo.wod.f.rejectReason")])) return;
+                      void run(
                         () => api.customerRejectWorkOrder(token, workOrder.id, rejectReason.trim()),
                         t("mo.wod.msg.rejected"),
-                      )
-                    }
+                      );
+                    }}
                   >
                     {t("mo.wod.act.recordRejection")}
                   </Button>
@@ -695,33 +730,40 @@ export function WorkOrderDetailPage() {
                     </Field>
                   </div>
                   {costForm.unitCost !== "" &&
-                  (!COST_AMOUNT_RE.test(costForm.quantity) || !COST_AMOUNT_RE.test(costForm.unitCost)) ? (
+                  (!COST_AMOUNT_RE.test(dec(costForm.quantity)) || !COST_AMOUNT_RE.test(dec(costForm.unitCost))) ? (
                     <p className="text-sm text-rose-600">{t("mo.wod.n.amountFormat")}</p>
                   ) : null}
-                  {COST_AMOUNT_RE.test(costForm.quantity) && COST_AMOUNT_RE.test(costForm.unitCost) ? (
+                  {COST_AMOUNT_RE.test(dec(costForm.quantity)) && COST_AMOUNT_RE.test(dec(costForm.unitCost)) ? (
                     <p className="text-sm text-slate-600">
-                      {t("mo.wod.f.lineTotal")}: {formatMoney(lineTotal(costForm.quantity, costForm.unitCost))}
+                      {t("mo.wod.f.lineTotal")}: {formatMoney(lineTotal(dec(costForm.quantity), dec(costForm.unitCost)))}
                     </p>
                   ) : null}
                   <Button
-                    disabled={
-                      busy ||
-                      !COST_AMOUNT_RE.test(costForm.quantity) ||
-                      !COST_AMOUNT_RE.test(costForm.unitCost) ||
-                      !(Number(costForm.quantity) > 0) ||
-                      !(Number(costForm.unitCost) > 0)
-                    }
-                    onClick={() =>
-                      run(async () => {
+                    disabled={busy}
+                    onClick={() => {
+                      const qty = dec(costForm.quantity);
+                      const unit = dec(costForm.unitCost);
+                      const qtyOk = COST_AMOUNT_RE.test(qty) && Number(qty) > 0;
+                      const unitOk = COST_AMOUNT_RE.test(unit) && Number(unit) > 0;
+                      const missing = [
+                        costForm.quantity.trim() === "" ? t("mo.wod.f.quantity") : null,
+                        costForm.unitCost.trim() === "" ? t("mo.wod.f.unitCost") : null,
+                      ];
+                      const invalid = [
+                        costForm.quantity.trim() !== "" && !qtyOk ? t("mo.wod.f.quantity") : null,
+                        costForm.unitCost.trim() !== "" && !unitOk ? t("mo.wod.f.unitCost") : null,
+                      ];
+                      if (!formOk(missing, invalid)) return;
+                      void run(async () => {
                         await api.addWorkOrderCostItem(token, workOrder.id, {
                           costType: costForm.costType,
                           description: costForm.description.trim() || null,
-                          quantity: costForm.quantity,
-                          unitCost: costForm.unitCost,
+                          quantity: qty,
+                          unitCost: unit,
                         });
                         setCostForm((f) => ({ ...f, description: "", quantity: "1", unitCost: "" }));
-                      }, t("mo.wod.msg.costAdded"))
-                    }
+                      }, t("mo.wod.msg.costAdded"));
+                    }}
                   >
                     {t("mo.wod.act.addCost")}
                   </Button>
@@ -740,10 +782,17 @@ export function WorkOrderDetailPage() {
                     <div className="flex items-end">
                       <Button
                         variant="secondary"
-                        disabled={busy || !legalEntityId || costItems.length === 0}
-                        onClick={() =>
-                          run(() => api.finalizeWorkOrderCosts(token, workOrder.id, legalEntityId), t("mo.wod.msg.costsFinalized"))
-                        }
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            !formOk([
+                              legalEntityId ? null : t("mo.wod.f.legalEntity"),
+                              costItems.length > 0 ? null : t("mo.wod.t.costs"),
+                            ])
+                          )
+                            return;
+                          void run(() => api.finalizeWorkOrderCosts(token, workOrder.id, legalEntityId), t("mo.wod.msg.costsFinalized"));
+                        }}
                       >
                         {t("mo.wod.act.finalizeCosts")}
                       </Button>
@@ -832,14 +881,19 @@ export function WorkOrderDetailPage() {
                 <p className="text-sm text-rose-600">{t("mo.wod.n.percentFormat")}</p>
               ) : null}
               <Button
-                disabled={
-                  busy ||
-                  !legalEntityId ||
-                  (markupPct.trim() !== "" && percentToFraction(markupPct) === null) ||
-                  (isTaxable && percentToFraction(taxPct) === null)
-                }
-                onClick={() =>
-                  run(
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    !formOk(
+                      [legalEntityId ? null : t("mo.wod.f.legalEntity")],
+                      [
+                        markupPct.trim() !== "" && percentToFraction(markupPct) === null ? t("mo.wod.f.markupPct") : null,
+                        isTaxable && percentToFraction(taxPct) === null ? t("mo.wod.f.taxPct") : null,
+                      ],
+                    )
+                  )
+                    return;
+                  void run(
                     () =>
                       api.createWorkOrderInvoice(token, workOrder.id, {
                         legalEntityId,
@@ -848,8 +902,8 @@ export function WorkOrderDetailPage() {
                         taxRate: isTaxable ? (percentToFraction(taxPct) ?? undefined) : undefined,
                       }),
                     t("mo.wod.msg.invoiceCreated"),
-                  )
-                }
+                  );
+                }}
               >
                 {t("mo.wod.act.createInvoice")}
               </Button>

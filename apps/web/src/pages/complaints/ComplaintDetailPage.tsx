@@ -93,7 +93,11 @@ export function ComplaintDetailPage() {
   }
 
   async function runReopen() {
-    if (!complaintId || !reopenStep) return;
+    if (!complaintId) return;
+    if (!reopenStep) {
+      setNotice({ tone: "error", text: t("common.form.missing", { fields: t("cmp.detail.f.reopenToStep") }) });
+      return;
+    }
     setBusyAction("reopen");
     setNotice(null);
     try {
@@ -281,7 +285,7 @@ export function ComplaintDetailPage() {
                     <Button
                       variant="secondary"
                       className="w-full"
-                      disabled={!reopenStep || busyAction !== null}
+                      disabled={busyAction !== null}
                       onClick={runReopen}
                     >
                       {busyAction === "reopen" ? "Working…" : "Reopen complaint"}

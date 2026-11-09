@@ -164,30 +164,50 @@ export function ProjectDeliveryAdvancedCostEVPage() {
     setModal((m) => (m.kind === "create-cost-entry" ? { ...m, form: { ...m.form, ...patch } } : m));
   };
 
-  const costFormError = (form: CostEntryForm): string | null => {
-    if (!form.activityId) return "Pick an activity.";
-    if (!MONEY_2DP.test(form.amount.trim())) return "Amount must be a decimal with at most 2 decimals.";
-    if (!/^[A-Za-z]{3}$/.test(form.currency.trim())) return "Currency must be a 3-letter code.";
-    if (!form.entryDate) return "Entry date is required.";
-    if (!form.idempotencyKey.trim()) return "Idempotency key is required.";
+  // Validation message shown inside the open form (the page-level alert sits far above it).
+  const [formMsg, setFormMsg] = useState<string | null>(null);
+  useEffect(() => {
+    setFormMsg(null);
+  }, [modal.kind]);
+
+  // A comma is accepted as the decimal separator ("12,5" -> "12.5").
+  const decimal = (v: string) => v.trim().replace(",", ".");
+
+  const costFormProblem = (form: CostEntryForm): string | null => {
+    const missing = [
+      !form.activityId ? t("pd.cost.f.activity") : null,
+      !form.amount.trim() ? t("pd.cost.f.amount") : null,
+      !form.currency.trim() ? t("pd.cost.f.currency") : null,
+      !form.entryDate ? t("pd.cost.f.entryDate") : null,
+      !form.idempotencyKey.trim() ? t("pd.cost.f.idempotencyKey") : null,
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) return t("common.form.missing", { fields: missing.join(", ") });
+    const invalid = [
+      !MONEY_2DP.test(decimal(form.amount)) ? `${t("pd.cost.f.amount")} (0.00)` : null,
+      !/^[A-Za-z]{3}$/.test(form.currency.trim()) ? `${t("pd.cost.f.currency")} (IDR)` : null,
+    ].filter((x): x is string => x !== null);
+    if (invalid.length > 0) return t("common.form.invalid", { fields: invalid.join(", ") });
     return null;
   };
 
   const createCostEntry = async () => {
     if (modal.kind !== "create-cost-entry") return;
     const form = modal.form;
-    const invalid = costFormError(form);
+    const invalid = costFormProblem(form);
     if (invalid) {
-      setError(invalid);
+      setNotice(null);
+      setError(null);
+      setFormMsg(invalid);
       return;
     }
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     try {
       await api.createProjectDeliveryCostEntry(token, projectId, {
         activityId: form.activityId,
         entryType: form.entryType as "actual" | "commitment" | "adjustment",
-        amount: form.amount.trim(),
+        amount: decimal(form.amount),
         currency: form.currency.trim().toUpperCase(),
         idempotencyKey: form.idempotencyKey.trim(),
         entryDate: form.entryDate,
@@ -232,10 +252,14 @@ export function ProjectDeliveryAdvancedCostEVPage() {
   };
 
   const createEvSnapshot = async () => {
-    if (modal.kind !== "create-ev-snapshot" || !modal.asOfDate) {
-      setError(t("pd.cost.msg.snapshotDateIsRequired"));
+    if (modal.kind !== "create-ev-snapshot") return;
+    if (!modal.asOfDate) {
+      setNotice(null);
+      setError(null);
+      setFormMsg(t("common.form.missing", { fields: t("pd.cost.f.snapshotDate") }));
       return;
     }
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     try {
@@ -397,7 +421,21 @@ export function ProjectDeliveryAdvancedCostEVPage() {
             <Input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
           </Field>
           <div className="flex items-end gap-2">
-            <Button onClick={() => load()} disabled={!projectId || !asOfDate || loading}>
+            <Button
+              onClick={() => {
+                const missing = [
+                  !projectId ? t("pd.cost.f.project") : null,
+                  !asOfDate ? t("pd.cost.f.asOfDate") : null,
+                ].filter((x): x is string => x !== null);
+                if (missing.length > 0) {
+                  setNotice(null);
+                  setError(t("common.form.missing", { fields: missing.join(", ") }));
+                  return;
+                }
+                void load();
+              }}
+              disabled={loading}
+            >
               {loading ? <Spinner /> : "Load"}
             </Button>
           </div>
@@ -464,8 +502,15 @@ export function ProjectDeliveryAdvancedCostEVPage() {
               <h2 className="text-sm font-semibold text-ink">{t("pd.cost.t.costEntries")}</h2>
               <Button
                 variant="secondary"
-                disabled={busy || activities.length === 0}
-                onClick={openCostEntryModal}
+                disabled={busy}
+                onClick={() => {
+                  if (activities.length === 0) {
+                    setNotice(null);
+                    setError(t("pd.cost.msg.needsActivity"));
+                    return;
+                  }
+                  openCostEntryModal();
+                }}
               >
               {t("pd.cost.t.entry")}
               </Button>
@@ -546,7 +591,7 @@ export function ProjectDeliveryAdvancedCostEVPage() {
             <Field label={t("pd.cost.f.amount")} required>
               <Input
                 inputMode="decimal"
-                placeholder="0.00"
+                placeholder={t("common.form.example", { value: "0.00" })}
                 value={modal.form.amount}
                 onChange={(e) => patchCostForm({ amount: e.target.value })}
               />
@@ -554,7 +599,7 @@ export function ProjectDeliveryAdvancedCostEVPage() {
             <Field label={t("pd.cost.f.currency")} required>
               <Input
                 maxLength={3}
-                placeholder="IDR"
+                placeholder={t("common.form.example", { value: "IDR" })}
                 value={modal.form.currency}
                 onChange={(e) => patchCostForm({ currency: e.target.value.toUpperCase() })}
               />
@@ -581,18 +626,13 @@ export function ProjectDeliveryAdvancedCostEVPage() {
               />
             </Field>
           </div>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button
-              disabled={
-                busy ||
-                !modal.form.activityId ||
-                !modal.form.amount.trim() ||
-                !/^[A-Za-z]{3}$/.test(modal.form.currency.trim()) ||
-                !modal.form.entryDate ||
-                !modal.form.idempotencyKey.trim()
-              }
-              onClick={() => createCostEntry()}
-            >
+            <Button disabled={busy} onClick={() => createCostEntry()}>
               Record
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -614,8 +654,13 @@ export function ProjectDeliveryAdvancedCostEVPage() {
               />
             </Field>
           </div>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !modal.asOfDate} onClick={() => createEvSnapshot()}>
+            <Button disabled={busy} onClick={() => createEvSnapshot()}>
               Record
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>

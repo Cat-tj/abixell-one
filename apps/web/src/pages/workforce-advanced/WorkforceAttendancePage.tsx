@@ -174,17 +174,56 @@ export function WorkforceAttendancePage() {
     [shifts],
   );
 
+  // Reports missing/invalid fields instead of silently refusing to submit.
+  function requireFields(checks: Array<[unknown, string]>, invalid: Array<[boolean, string]> = []): boolean {
+    const missing = checks.filter(([value]) => !value).map(([, label]) => label);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return false;
+    }
+    const bad = invalid.filter(([isBad]) => isBad).map(([, label]) => label);
+    if (bad.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: bad.join(", ") }));
+      return false;
+    }
+    return true;
+  }
+
+  // Accepts "8:00", "08.00", "0800", "08:00:00" and returns HH:MM:SS (or null when malformed).
+  function normalizeTime(raw: string): string | null {
+    const m = raw.trim().match(/^(\d{1,2})[:.]?(\d{2})(?:[:.]?(\d{2}))?$/);
+    if (!m) return null;
+    const [h, min, sec] = [Number(m[1]), Number(m[2]), Number(m[3] ?? "0")];
+    if (h > 23 || min > 59 || sec > 59) return null;
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${p(h)}:${p(min)}:${p(sec)}`;
+  }
+
   async function handleCreateShift() {
     if (!canManage) return;
+    if (!requireFields([
+      [shiftCode.trim(), t("wf.attend.f.shiftCode")],
+      [shiftName.trim(), t("wf.attend.f.shiftName")],
+      [shiftStartTime.trim(), t("wf.attend.f.startTimeHhMmSs")],
+      [shiftEndTime.trim(), t("wf.attend.f.endTimeHhMmSs")],
+    ])) return;
+    const startTime = normalizeTime(shiftStartTime);
+    const endTime = normalizeTime(shiftEndTime);
+    if (!requireFields([], [
+      [startTime === null, t("wf.attend.f.startTimeHhMmSs")],
+      [endTime === null, t("wf.attend.f.endTimeHhMmSs")],
+    ]) || startTime === null || endTime === null) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const created = await api.createWorkforceShift(token, {
-        shiftCode,
-        name: shiftName,
-        startTime: shiftStartTime,
-        endTime: shiftEndTime,
+        shiftCode: shiftCode.trim(),
+        name: shiftName.trim(),
+        startTime,
+        endTime,
         breakMinutes: Number(shiftBreakMinutes) || 0,
         isOvernight: shiftIsOvernight,
       });
@@ -217,6 +256,11 @@ export function WorkforceAttendancePage() {
 
   async function handleUpsertRoster() {
     if (!canManage) return;
+    if (!requireFields([
+      [rosterEmployeeId, t("wf.attend.f.employee")],
+      [rosterShiftId, t("wf.attend.f.shift")],
+      [rosterDate, t("wf.attend.f.rosterDate")],
+    ])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -239,6 +283,10 @@ export function WorkforceAttendancePage() {
 
   async function handleRecordAttendance() {
     if (!canManage) return;
+    if (!requireFields(
+      [[attEmployeeId, t("wf.attend.f.employee")], [attDate, t("wf.attend.f.attendanceDate")]],
+      [[attClockIn !== "" && attClockOut !== "" && attClockOut < attClockIn, t("wf.attend.f.clockOutIsoTime")]],
+    )) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -492,7 +540,7 @@ export function WorkforceAttendancePage() {
                 </div>
               </div>
               <div className="mt-3">
-                <Button disabled={busy || !attEmployeeId || !attDate} onClick={() => void handleRecordAttendance()}>
+                <Button disabled={busy} onClick={() => void handleRecordAttendance()}>
                   Save Attendance Record
                 </Button>
               </div>
@@ -529,7 +577,7 @@ export function WorkforceAttendancePage() {
                 </div>
               </div>
               <div className="mt-3">
-                <Button disabled={busy || !rosterEmployeeId || !rosterShiftId || !rosterDate} onClick={() => void handleUpsertRoster()}>
+                <Button disabled={busy} onClick={() => void handleUpsertRoster()}>
                   Save Roster Assignment
                 </Button>
               </div>
@@ -541,16 +589,16 @@ export function WorkforceAttendancePage() {
               <h2 className="mb-3 text-sm font-semibold text-slate-800">{t("wf.attend.t.createWorkShift")}</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <Field label={t("wf.attend.f.shiftCode")} required>
-                  <Input value={shiftCode} onChange={(e) => setShiftCode(e.target.value)} placeholder="SHIFT_MORNING" />
+                  <Input value={shiftCode} onChange={(e) => setShiftCode(e.target.value)} placeholder={t("common.form.example", { value: "SHIFT_MORNING" })} />
                 </Field>
                 <Field label={t("wf.attend.f.shiftName")} required>
                   <Input value={shiftName} onChange={(e) => setShiftName(e.target.value)} placeholder={t("wf.attend.p.morningStandard")} />
                 </Field>
                 <Field label={t("wf.attend.f.startTimeHhMmSs")} required>
-                  <Input value={shiftStartTime} onChange={(e) => setShiftStartTime(e.target.value)} placeholder="08:00:00" />
+                  <Input value={shiftStartTime} onChange={(e) => setShiftStartTime(e.target.value)} placeholder={t("common.form.example", { value: "08:00:00" })} />
                 </Field>
                 <Field label={t("wf.attend.f.endTimeHhMmSs")} required>
-                  <Input value={shiftEndTime} onChange={(e) => setShiftEndTime(e.target.value)} placeholder="17:00:00" />
+                  <Input value={shiftEndTime} onChange={(e) => setShiftEndTime(e.target.value)} placeholder={t("common.form.example", { value: "17:00:00" })} />
                 </Field>
                 <Field label={t("wf.attend.f.breakMinutes")}>
                   <Input type="number" min="0" value={shiftBreakMinutes} onChange={(e) => setShiftBreakMinutes(e.target.value)} />
@@ -568,7 +616,7 @@ export function WorkforceAttendancePage() {
                 </div>
               </div>
               <div className="mt-3">
-                <Button disabled={busy || !shiftCode || !shiftName || !shiftStartTime || !shiftEndTime} onClick={() => void handleCreateShift()}>
+                <Button disabled={busy} onClick={() => void handleCreateShift()}>
                   Create Shift
                 </Button>
               </div>

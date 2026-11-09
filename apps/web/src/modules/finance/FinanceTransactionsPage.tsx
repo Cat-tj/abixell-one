@@ -117,9 +117,27 @@ export function FinanceTransactionsPage() {
 
   const accountOf = (id: string) => accounts.find((a) => a.id === id);
   const categoryLabel = (code: string) => categories.find((c) => c.code === code)?.label ?? code;
-  const amountValid = isValidAmountInput(amount);
+  // A comma is accepted as the decimal separator ("12,5" -> "12.5").
+  const amountNorm = amount.trim().replace(",", ".");
+  const amountValid = isValidAmountInput(amountNorm);
 
   async function record() {
+    const missing = [
+      amount.trim() === "" ? t("fin.common.amount") : null,
+      !transactionDate ? t("fin.common.date") : null,
+      !accountCode ? t("fin.common.account") : null,
+      !categoryCode ? t("fin.common.category") : null,
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return;
+    }
+    if (!amountValid) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: `${t("fin.common.amount")} (${t("finTx.amountHint")})` }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -127,7 +145,7 @@ export function FinanceTransactionsPage() {
       const created = await api.recordFinanceTransaction(token, {
         direction,
         // Sent verbatim as text — no Number(), no parseFloat, no rounding.
-        amount: amount.trim(),
+        amount: amountNorm,
         transactionDate,
         accountCode,
         categoryCode,
@@ -255,7 +273,7 @@ export function FinanceTransactionsPage() {
             />
           </Field>
           <div className="flex items-end">
-            <Button disabled={busy || !amountValid || !accountCode || !categoryCode || !transactionDate} onClick={() => void record()}>
+            <Button disabled={busy} onClick={() => void record()}>
               {t("finTx.record")}
             </Button>
           </div>

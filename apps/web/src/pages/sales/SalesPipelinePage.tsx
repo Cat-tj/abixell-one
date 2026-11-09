@@ -1,5 +1,5 @@
 /** Wave A1 — Customer & Commercial Advanced (CUS-ADV-001 / CUS-ADV-002). */
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import {
   api,
@@ -70,6 +70,21 @@ function blank(v: string): boolean {
   return v.trim() === "";
 }
 
+// Forgiving decimal parser: "12,5" -> 12.5, "1.500.000,50" -> 1500000.5, "Rp 25000" -> 25000.
+function parseDecimal(raw: string): number | null {
+  let s = raw.trim().replace(/[^\d.,-]/g, "");
+  if (s === "") return null;
+  if (s.includes(",")) s = s.includes(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Forgiving integer parser: "1.500", "1,500", "75%" keep digits only.
+function parseDigits(raw: string): number | null {
+  const digits = raw.replace(/\D/g, "");
+  return digits === "" ? null : Number(digits);
+}
+
 const EMPTY_OPP_FORM = {
   customerId: "",
   title: "",
@@ -119,6 +134,7 @@ export function SalesPipelinePage() {
   const [bookForm, setBookForm] = useState(EMPTY_BOOK_FORM);
   const [entryForm, setEntryForm] = useState(EMPTY_ENTRY_FORM);
   const [stageForm, setStageForm] = useState({ stageCode: "", outcome: "", outcomeReason: "", note: "" });
+  const messageRef = useRef<HTMLDivElement | null>(null);
 
   const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
   const [selectedQuotationId, setSelectedQuotationId] = useState<string | null>(null);
@@ -235,10 +251,39 @@ export function SalesPipelinePage() {
       });
   }, [token, selectedPriceBookId, t]);
 
+  // Shows what is missing/invalid (never silently refuses) and brings the banner into view.
+  function rejectForm(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const miss = missing.filter((x): x is string => x !== null);
+    const bad = invalid.filter((x): x is string => x !== null);
+    if (miss.length === 0 && bad.length === 0) return false;
+    setMessage({
+      type: "error",
+      text: miss.length > 0
+        ? t("common.form.missing", { fields: miss.join(", ") })
+        : t("common.form.invalid", { fields: bad.join(", ") }),
+    });
+    messageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return true;
+  }
+
   // Handle Create Opportunity
   async function handleCreateOpportunity(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!oppCanSubmit) return;
+    const estimatedValue = blank(oppForm.estimatedValue) ? null : parseDecimal(oppForm.estimatedValue);
+    const probability = blank(oppForm.probabilityPercent) ? null : parseDigits(oppForm.probabilityPercent);
+    if (rejectForm(
+      [
+        blank(oppForm.title) ? t("sc.sales.f.title") : null,
+        blank(oppForm.customerId) ? t("sc.sales.f.customer") : null,
+        blank(oppForm.stageCode) ? t("sc.sales.f.stage") : null,
+        blank(oppForm.currencyCode) ? t("sc.sales.f.currency") : null,
+      ],
+      [
+        oppForm.currencyCode.trim().length < 3 ? t("sc.sales.f.currency") : null,
+        !blank(oppForm.estimatedValue) && (estimatedValue === null || estimatedValue < 0) ? t("sc.sales.f.estimatedValue") : null,
+        !blank(oppForm.probabilityPercent) && (probability === null || probability > 100) ? t("sc.sales.f.confidence") : null,
+      ],
+    )) return;
     try {
       await api.createOpportunity(token, {
         customerId: oppForm.customerId,
@@ -246,8 +291,8 @@ export function SalesPipelinePage() {
         stageCode: oppForm.stageCode,
         sourceCode: oppForm.sourceCode || null,
         currencyCode: oppForm.currencyCode.trim(),
-        estimatedValue: oppForm.estimatedValue ? Number(oppForm.estimatedValue) : null,
-        probabilityPercent: oppForm.probabilityPercent ? Math.round(Number(oppForm.probabilityPercent)) : null,
+        estimatedValue,
+        probabilityPercent: probability,
         expectedCloseDate: oppForm.expectedCloseDate || null,
       });
       setMessage({ type: "success", text: "Opportunity created successfully." });
@@ -264,7 +309,8 @@ export function SalesPipelinePage() {
   // Handle Opportunity Stage Transition
   async function handleStageChange(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!selectedOppId || blank(stageForm.stageCode)) return;
+    if (rejectForm([blank(stageForm.stageCode) ? t("sc.sales.f.targetStage") : null])) return;
+    if (!selectedOppId) return;
     try {
       await api.changeOpportunityStage(token, selectedOppId, {
         stageCode: stageForm.stageCode,
@@ -287,7 +333,23 @@ export function SalesPipelinePage() {
   // Handle Create Quotation
   async function handleCreateQuotation(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!quoteCanSubmit) return;
+    const quantity = parseDecimal(quoteForm.quantity);
+    const unitPrice = blank(quoteForm.unitPrice) ? null : parseDecimal(quoteForm.unitPrice);
+    const discountAmount = blank(quoteForm.discountAmount) ? null : parseDecimal(quoteForm.discountAmount);
+    if (rejectForm(
+      [
+        blank(quoteForm.opportunityId) ? t("sc.sales.f.opportunity") : null,
+        blank(quoteForm.title) ? t("sc.sales.f.title") : null,
+        blank(quoteForm.serviceId) ? t("sc.sales.f.service") : null,
+        blank(quoteForm.unitCode) ? t("sc.sales.f.unit") : null,
+        blank(quoteForm.quantity) ? t("sc.sales.f.quantity") : null,
+      ],
+      [
+        quantity === null || quantity <= 0 ? t("sc.sales.f.quantity") : null,
+        !blank(quoteForm.unitPrice) && (unitPrice === null || unitPrice < 0) ? t("sc.sales.f.unitPriceOptional") : null,
+        !blank(quoteForm.discountAmount) && (discountAmount === null || discountAmount < 0) ? t("sc.sales.f.discountAmount") : null,
+      ],
+    ) || quantity === null) return;
     try {
       await api.createQuotation(token, {
         opportunityId: quoteForm.opportunityId,
@@ -298,9 +360,9 @@ export function SalesPipelinePage() {
           {
             serviceId: quoteForm.serviceId,
             unitCode: quoteForm.unitCode,
-            quantity: Number(quoteForm.quantity),
-            unitPrice: quoteForm.unitPrice ? Number(quoteForm.unitPrice) : null,
-            discountAmount: quoteForm.discountAmount ? Number(quoteForm.discountAmount) : null,
+            quantity,
+            unitPrice,
+            discountAmount,
           },
         ],
       });
@@ -372,7 +434,18 @@ export function SalesPipelinePage() {
   // Handle Create Price Book
   async function handleCreatePriceBook(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!bookCanSubmit) return;
+    if (rejectForm(
+      [
+        blank(bookForm.code) ? t("sc.sales.f.code") : null,
+        blank(bookForm.name) ? t("sc.sales.f.name") : null,
+        blank(bookForm.currencyCode) ? t("sc.sales.f.currency") : null,
+        blank(bookForm.effectiveFrom) ? t("sc.sales.f.effectiveFrom") : null,
+      ],
+      [
+        bookForm.currencyCode.trim().length < 3 ? t("sc.sales.f.currency") : null,
+        !blank(bookForm.effectiveTo) && bookForm.effectiveTo < bookForm.effectiveFrom ? t("sc.sales.f.effectiveTo") : null,
+      ],
+    )) return;
     try {
       const created = await api.createPriceBook(token, {
         code: bookForm.code.trim(),
@@ -396,13 +469,26 @@ export function SalesPipelinePage() {
   // Handle Add Entry to Price Book
   async function handleAddPriceBookEntry(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!selectedPriceBookId || !entryCanSubmit) return;
+    const entryPrice = parseDecimal(entryForm.unitPrice);
+    const entryMinQty = blank(entryForm.minQuantity) ? null : parseDecimal(entryForm.minQuantity);
+    if (rejectForm(
+      [
+        blank(entryForm.serviceId) ? t("sc.sales.f.service") : null,
+        blank(entryForm.unitCode) ? t("sc.sales.f.unit") : null,
+        blank(entryForm.unitPrice) ? t("sc.sales.f.unitPrice") : null,
+      ],
+      [
+        entryPrice === null || entryPrice < 0 ? t("sc.sales.f.unitPrice") : null,
+        !blank(entryForm.minQuantity) && (entryMinQty === null || entryMinQty < 0) ? t("sc.sales.p.minQty") : null,
+      ],
+    ) || entryPrice === null) return;
+    if (!selectedPriceBookId) return;
     try {
       await api.addPriceBookEntry(token, selectedPriceBookId, {
         serviceId: entryForm.serviceId,
         unitCode: entryForm.unitCode,
-        unitPrice: Number(entryForm.unitPrice),
-        minQuantity: entryForm.minQuantity ? Number(entryForm.minQuantity) : undefined,
+        unitPrice: entryPrice,
+        minQuantity: entryMinQty ?? undefined,
       });
       setMessage({ type: "success", text: "Price book entry added." });
       setEntryForm(EMPTY_ENTRY_FORM);
@@ -420,28 +506,6 @@ export function SalesPipelinePage() {
     customers.find((c) => c.id === id)?.name ?? "—";
   const serviceName = (id: string | null | undefined) =>
     services.find((sv) => sv.id === id)?.name ?? "—";
-
-  const oppCanSubmit =
-    !blank(oppForm.customerId) &&
-    !blank(oppForm.title) &&
-    !blank(oppForm.stageCode) &&
-    oppForm.currencyCode.trim().length >= 3;
-  const quoteCanSubmit =
-    !blank(quoteForm.opportunityId) &&
-    !blank(quoteForm.title) &&
-    !blank(quoteForm.serviceId) &&
-    !blank(quoteForm.unitCode) &&
-    Number(quoteForm.quantity) > 0;
-  const bookCanSubmit =
-    !blank(bookForm.code) &&
-    !blank(bookForm.name) &&
-    bookForm.currencyCode.trim().length >= 3 &&
-    !blank(bookForm.effectiveFrom);
-  const entryCanSubmit =
-    !blank(entryForm.serviceId) &&
-    !blank(entryForm.unitCode) &&
-    !blank(entryForm.unitPrice) &&
-    Number(entryForm.unitPrice) >= 0;
 
   // Aggregated pipeline rows are keyed by stage + outcome.
   const pipelineCards = useMemo(
@@ -595,9 +659,11 @@ export function SalesPipelinePage() {
       />
 
       {message && (
-        <Alert tone={message.type === "error" ? "error" : message.type === "success" ? "success" : "info"}>
-          {message.text}
-        </Alert>
+        <div ref={messageRef}>
+          <Alert tone={message.type === "error" ? "error" : message.type === "success" ? "success" : "info"}>
+            {message.text}
+          </Alert>
+        </div>
       )}
 
       {/* Tabs */}
@@ -797,7 +863,7 @@ export function SalesPipelinePage() {
                               onChange={(e) => setStageForm({ ...stageForm, note: e.target.value })}
                             />
                           </Field>
-                          <Button type="submit" variant="primary" className="w-full" disabled={blank(stageForm.stageCode)}>
+                          <Button type="submit" variant="primary" className="w-full">
                             {t("sc.sales.t.updateStage")}
                           </Button>
                         </form>
@@ -891,20 +957,18 @@ export function SalesPipelinePage() {
                         </Field>
                         <Field label={t("sc.sales.f.estimatedValue")}>
                           <Input
-                            type="number"
-                            min="0"
-                            placeholder="150000000"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder={t("common.form.example", { value: "150000000" })}
                             value={oppForm.estimatedValue}
                             onChange={(e) => setOppForm({ ...oppForm, estimatedValue: e.target.value })}
                           />
                         </Field>
                         <Field label={t("sc.sales.f.confidence")}>
                           <Input
-                            type="number"
-                            placeholder="75"
-                            min="0"
-                            max="100"
-                            step="1"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={t("common.form.example", { value: "75" })}
                             value={oppForm.probabilityPercent}
                             onChange={(e) => setOppForm({ ...oppForm, probabilityPercent: e.target.value })}
                           />
@@ -916,7 +980,7 @@ export function SalesPipelinePage() {
                             onChange={(e) => setOppForm({ ...oppForm, expectedCloseDate: e.target.value })}
                           />
                         </Field>
-                        <Button type="submit" variant="primary" className="w-full" disabled={!oppCanSubmit}>
+                        <Button type="submit" variant="primary" className="w-full">
                           {t("sc.sales.t.createOpportunity")}
                         </Button>
                       </form>
@@ -1065,9 +1129,8 @@ export function SalesPipelinePage() {
                         </Field>
                         <Field label={t("sc.sales.f.quantity")} required>
                           <Input
-                            type="number"
-                            min="0"
-                            step="any"
+                            type="text"
+                            inputMode="decimal"
                             value={quoteForm.quantity}
                             onChange={(e) => setQuoteForm({ ...quoteForm, quantity: e.target.value })}
                           />
@@ -1075,17 +1138,17 @@ export function SalesPipelinePage() {
                       </div>
                       <Field label={t("sc.sales.f.unitPriceOptional")}>
                         <Input
-                          type="number"
-                          min="0"
-                          placeholder="25000000"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder={t("common.form.example", { value: "25000000" })}
                           value={quoteForm.unitPrice}
                           onChange={(e) => setQuoteForm({ ...quoteForm, unitPrice: e.target.value })}
                         />
                       </Field>
                       <Field label={t("sc.sales.f.discountAmount")}>
                         <Input
-                          type="number"
-                          min="0"
+                          type="text"
+                          inputMode="decimal"
                           value={quoteForm.discountAmount}
                           onChange={(e) => setQuoteForm({ ...quoteForm, discountAmount: e.target.value })}
                         />
@@ -1103,7 +1166,7 @@ export function SalesPipelinePage() {
                           onChange={(e) => setQuoteForm({ ...quoteForm, notes: e.target.value })}
                         />
                       </Field>
-                      <Button type="submit" variant="primary" className="w-full" disabled={!quoteCanSubmit}>
+                      <Button type="submit" variant="primary" className="w-full">
                         {t("sc.sales.t.createQuotation")}
                       </Button>
                     </form>
@@ -1156,7 +1219,7 @@ export function SalesPipelinePage() {
                       <Field label={t("sc.sales.f.effectiveTo")}>
                         <Input type="date" value={bookForm.effectiveTo} onChange={(e) => setBookForm({ ...bookForm, effectiveTo: e.target.value })} />
                       </Field>
-                      <Button type="submit" variant="secondary" className="w-full text-xs" disabled={!bookCanSubmit}>
+                      <Button type="submit" variant="secondary" className="w-full text-xs">
               {t("sc.sales.t.createPriceBook")}
               </Button>
                     </form>
@@ -1223,10 +1286,10 @@ export function SalesPipelinePage() {
                               <option key={u.code} value={u.code}>{u.label}</option>
                             ))}
                           </Select>
-                          <Input type="number" min="0" value={entryForm.unitPrice} placeholder={t("sc.sales.p.unitPrice")} onChange={(e) => setEntryForm({ ...entryForm, unitPrice: e.target.value })} />
-                          <Input type="number" min="0" step="any" value={entryForm.minQuantity} placeholder={t("sc.sales.p.minQty")} onChange={(e) => setEntryForm({ ...entryForm, minQuantity: e.target.value })} />
+                          <Input type="text" inputMode="decimal" value={entryForm.unitPrice} placeholder={t("sc.sales.p.unitPrice")} onChange={(e) => setEntryForm({ ...entryForm, unitPrice: e.target.value })} />
+                          <Input type="text" inputMode="decimal" value={entryForm.minQuantity} placeholder={t("sc.sales.p.minQty")} onChange={(e) => setEntryForm({ ...entryForm, minQuantity: e.target.value })} />
                           <div className="col-span-2 md:col-span-4">
-                            <Button type="submit" variant="primary" className="w-full text-xs" disabled={!entryCanSubmit}>
+                            <Button type="submit" variant="primary" className="w-full text-xs">
                               {t("sc.sales.t.addVolumePricingTier")}
                             </Button>
                           </div>

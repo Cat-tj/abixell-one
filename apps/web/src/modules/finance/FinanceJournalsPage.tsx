@@ -129,6 +129,34 @@ export function FinanceJournalsPage() {
   }
 
   async function createJournal() {
+    const missing = [
+      !legalEntityId ? t("fin.common.legalEntity") : null,
+      journalNumber.trim() === "" ? t("finJournals.journalNumber") : null,
+      !journalDate ? t("finJournals.journalDate") : null,
+      !periodId ? t("finJournals.period") : null,
+      currency.trim() === "" ? t("fin.common.currency") : null,
+      !lines.some((line) => line.accountId) ? t("finJournals.lines") : null,
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return;
+    }
+    // A comma is accepted as the decimal separator ("12,5" -> "12.5").
+    const decimal = (v: string) => v.trim().replace(",", ".");
+    const badLines = lines
+      .map((line, index) => ({ line, n: index + 1 }))
+      .filter(
+        ({ line }) =>
+          (!line.accountId && (line.debit.trim() !== "" || line.credit.trim() !== "")) ||
+          [line.debit, line.credit].some((v) => v.trim() !== "" && !/^\d+(\.\d+)?$/.test(decimal(v))),
+      )
+      .map(({ n }) => `${t("finJournals.lines")} #${n}`);
+    if (badLines.length > 0) {
+      setNotice(null);
+      setError(t("common.form.invalid", { fields: badLines.join(", ") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -147,8 +175,8 @@ export function FinanceJournalsPage() {
             accountId: line.accountId,
             lineNumber: index + 1,
             // Verbatim text, exactly as typed.
-            debit: line.debit.trim() || "0",
-            credit: line.credit.trim() || "0",
+            debit: decimal(line.debit) || "0",
+            credit: decimal(line.credit) || "0",
             lineDescription: line.lineDescription || null,
             projectId: null,
             siteId: null,
@@ -203,6 +231,11 @@ export function FinanceJournalsPage() {
   }
 
   async function reverse(row: AccountingJournalRecord) {
+    if (reversalReason.trim() === "") {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: t("finTxDetail.reason") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -225,12 +258,6 @@ export function FinanceJournalsPage() {
   }
 
   const openPeriods = periods.filter((p) => p.status === "open" || p.status === "draft");
-  const canCreate =
-    legalEntityId !== "" &&
-    journalNumber.trim() !== "" &&
-    journalDate !== "" &&
-    periodId !== "" &&
-    lines.some((line) => line.accountId);
 
   const columns: Column<AccountingJournalRecord>[] = [
     {
@@ -396,7 +423,7 @@ export function FinanceJournalsPage() {
               <Button variant="secondary" onClick={() => setLines((current) => [...current, { ...EMPTY_LINE }])}>
                 {t("finJournals.addLine")}
               </Button>
-              <Button disabled={busy || !canCreate} onClick={() => void createJournal()}>
+              <Button disabled={busy} onClick={() => void createJournal()}>
                 {t("finJournals.createDraft")}
               </Button>
             </div>
@@ -426,7 +453,7 @@ export function FinanceJournalsPage() {
                 <Input value={reversalReason} onChange={(e) => setReversalReason(e.target.value)} />
               </Field>
               <div className="mt-3 flex gap-2">
-                <Button disabled={busy || reversalReason.trim() === ""} onClick={() => void reverse(selected)}>
+                <Button disabled={busy} onClick={() => void reverse(selected)}>
                   {t("finJournals.createReversal")}
                 </Button>
                 <Button variant="ghost" onClick={() => setSelected(null)}>

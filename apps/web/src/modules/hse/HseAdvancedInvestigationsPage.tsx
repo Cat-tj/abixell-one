@@ -110,13 +110,20 @@ export function HseAdvancedInvestigationsPage() {
     void load();
   }, [load]);
 
+  /** Form problems are shown in the page alert; the forms sit lower on the page, so bring it into view. */
+  const reject = (message: string) => {
+    setNotice(null);
+    setError(message);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const fail = (err: unknown, fallback: string) =>
     setError(err instanceof ApiError ? err.message : fallback);
 
   const createFramework = async () => {
     if (modal.kind !== "create-framework") return;
     if (!modal.code.trim() || !modal.name.trim()) {
-      setError(t("hse.inv.codeNameRequired"));
+      reject(t("hse.inv.codeNameRequired"));
       return;
     }
     setBusy(true);
@@ -144,7 +151,7 @@ export function HseAdvancedInvestigationsPage() {
   const startInvestigation = async () => {
     if (modal.kind !== "start-investigation") return;
     if (!modal.recordId || !modal.frameworkId) {
-      setError(t("hse.inv.pickRecordFramework"));
+      reject(t("hse.inv.pickRecordFramework"));
       return;
     }
     setBusy(true);
@@ -164,7 +171,7 @@ export function HseAdvancedInvestigationsPage() {
   const saveInvestigation = async (conclude: boolean) => {
     if (modal.kind !== "conclude-investigation") return;
     if (conclude && !modal.rootCause.trim()) {
-      setError(t("hse.inv.rootCauseRequired"));
+      reject(t("hse.inv.rootCauseRequired"));
       return;
     }
     setBusy(true);
@@ -193,11 +200,11 @@ export function HseAdvancedInvestigationsPage() {
     const likelihood = Number(modal.likelihood);
     const severity = Number(modal.severity);
     if (!modal.title.trim()) {
-      setError(t("hse.inv.titleRequired"));
+      reject(t("hse.inv.titleRequired"));
       return;
     }
     if (!Number.isInteger(likelihood) || !Number.isInteger(severity)) {
-      setError(t("hse.inv.wholeNumbers"));
+      reject(t("hse.inv.wholeNumbers"));
       return;
     }
     setBusy(true);
@@ -378,6 +385,7 @@ export function HseAdvancedInvestigationsPage() {
               <Button
                 variant="secondary"
                 disabled={busy || records.length === 0}
+                title={records.length === 0 ? t("hse.inv.noRecordsToInvestigate") : undefined}
                 onClick={() => setModal({ kind: "start-investigation", recordId: "", frameworkId: "" })}
               >
                 + {t("hse.inv.addInvestigation")}
@@ -426,6 +434,7 @@ export function HseAdvancedInvestigationsPage() {
               <Button
                 variant="secondary"
                 disabled={busy || !matrix}
+                title={!matrix ? t("hse.inv.noMatrixDescription") : undefined}
                 onClick={() =>
                   setModal({
                     kind: "create-assessment",

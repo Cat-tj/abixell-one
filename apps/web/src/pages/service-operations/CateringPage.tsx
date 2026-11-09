@@ -45,7 +45,9 @@ import {
 type TabKey = "menus" | "recipes" | "plans" | "batches";
 const MEAL_TYPES: CateringMealType[] = ["breakfast", "lunch", "dinner", "snack"];
 const DECIMAL = /^\d+(\.\d{1,6})?$/;
-const isPositiveDecimal = (v: string) => DECIMAL.test(v.trim()) && Number(v) > 0;
+/** Accept "12,5" as "12.5" and drop stray spaces. */
+const normDecimal = (v: string) => v.replace(/\s/g, "").replace(",", ".");
+const isPositiveDecimal = (v: string) => DECIMAL.test(normDecimal(v)) && Number(normDecimal(v)) > 0;
 
 /** Best-effort: a role without customer access simply gets no site picker. */
 async function loadSites(token: string): Promise<SiteRecord[]> {
@@ -358,11 +360,26 @@ function MenusTab({ token, t, setError, setNotice, failure, reload, menus }: Sha
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const valid = code.trim() !== "" && name.trim() !== "" && from !== "" && (to === "" || to >= from);
+  const missing = [
+    code.trim() === "" ? t("cat.f.code") : null,
+    name.trim() === "" ? t("cat.f.name") : null,
+    from === "" ? t("cat.f.effectiveFrom") : null,
+  ].filter((x): x is string => x !== null);
+  const invalid = [from !== "" && to !== "" && to < from ? t("cat.f.effectiveTo") : null].filter(
+    (x): x is string => x !== null,
+  );
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!valid) return;
+    if (missing.length > 0 || invalid.length > 0) {
+      setNotice(null);
+      setError(
+        missing.length > 0
+          ? t("common.form.missing", { fields: missing.join(", ") })
+          : t("common.form.invalid", { fields: invalid.join(", ") }),
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -428,7 +445,7 @@ function MenusTab({ token, t, setError, setNotice, failure, reload, menus }: Sha
             </Field>
           </div>
           <div className="sm:col-span-2 lg:col-span-4">
-            <Button type="submit" disabled={!valid || busy}>
+            <Button type="submit" disabled={busy}>
               {t("cat.menu.create")}
             </Button>
           </div>
@@ -478,12 +495,22 @@ function RecipesTab({
   const [cost, setCost] = useState<CateringRecipeCost | null>(null);
   const [costBusy, setCostBusy] = useState<string | null>(null);
 
-  const valid =
-    code.trim() !== "" && name.trim() !== "" && outputItemId !== "" && isPositiveDecimal(outputQty) && outputUnit.trim() !== "" && from !== "";
+  const missing = [
+    code.trim() === "" ? t("cat.f.code") : null,
+    name.trim() === "" ? t("cat.f.name") : null,
+    outputItemId === "" ? t("cat.recipe.outputItem") : null,
+    !isPositiveDecimal(outputQty) ? t("cat.recipe.outputQty") : null,
+    outputUnit.trim() === "" ? t("cat.recipe.outputUnit") : null,
+    from === "" ? t("cat.f.effectiveFrom") : null,
+  ].filter((x): x is string => x !== null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!valid) return;
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -492,7 +519,7 @@ function RecipesTab({
         code: code.trim(),
         name: name.trim(),
         outputItemId,
-        outputQuantity: outputQty.trim(),
+        outputQuantity: normDecimal(outputQty),
         outputUnitCode: outputUnit.trim(),
         effectiveFrom: from,
       });
@@ -549,11 +576,26 @@ function RecipesTab({
   const isBlank = (r: IngredientRow) => r.itemId === "" && r.quantity.trim() === "";
   const filled = rows.filter((r) => !isBlank(r));
   const duplicate = new Set(filled.map((r) => r.itemId)).size !== filled.length;
-  const rowsValid =
-    filled.length > 0 && !duplicate && filled.every((r) => r.itemId !== "" && isPositiveDecimal(r.quantity) && r.unitCode.trim() !== "");
+  const ingredientMissing = [
+    filled.length === 0 || filled.some((r) => r.itemId === "") ? t("cat.req.ingredient") : null,
+    filled.length === 0 || filled.some((r) => !isPositiveDecimal(r.quantity)) ? t("cat.recipe.qty") : null,
+    filled.length === 0 || filled.some((r) => r.unitCode.trim() === "") ? t("cat.recipe.outputUnit") : null,
+  ].filter((x): x is string => x !== null);
 
   async function saveIngredients() {
-    if (!editing || !rowsValid) return;
+    if (!editing) return;
+    if (ingredientMissing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: ingredientMissing.join(", ") }));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (duplicate) {
+      setNotice(null);
+      setError(t("cat.recipe.duplicate"));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setEditBusy(true);
     setError(null);
     setNotice(null);
@@ -563,7 +605,7 @@ function RecipesTab({
         editing.code,
         filled.map((r, idx) => ({
           itemId: r.itemId,
-          quantity: r.quantity.trim(),
+          quantity: normDecimal(r.quantity),
           unitCode: r.unitCode.trim(),
           sortOrder: idx,
         })),
@@ -636,7 +678,7 @@ function RecipesTab({
             <UnitSelect units={units} value={outputUnit} onChange={setOutputUnit} placeholder={t("cat.pickUnit")} />
           </Field>
           <div className="sm:col-span-2 lg:col-span-4">
-            <Button type="submit" disabled={!valid || busy}>
+            <Button type="submit" disabled={busy}>
               {t("cat.recipe.create")}
             </Button>
           </div>
@@ -748,7 +790,7 @@ function RecipesTab({
             >
               {t("cat.recipe.addRow")}
             </Button>
-            <Button type="button" disabled={!rowsValid || editBusy} onClick={() => void saveIngredients()}>
+            <Button type="button" disabled={editBusy} onClick={() => void saveIngredients()}>
               {t("cat.recipe.saveIngredients")}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
@@ -811,12 +853,22 @@ function PlansTab({
   const [busy, setBusy] = useState(false);
 
   const activeMenus = menus.filter((m) => m.isActive);
-  const portionsNum = Number(portions);
-  const valid = menuCode !== "" && mealDate !== "" && /^\d+$/.test(portions) && portionsNum > 0;
+  // Accept "150", "1.500", "1,500" or "150 porsi": keep the digits only.
+  const portionsDigits = portions.replace(/\D/g, "");
+  const portionsNum = Number(portionsDigits);
+  const missing = [
+    menuCode === "" ? t("cat.plan.menu") : null,
+    mealDate === "" ? t("cat.f.date") : null,
+    !(portionsDigits !== "" && portionsNum > 0) ? t("cat.plan.portions") : null,
+  ].filter((x): x is string => x !== null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!valid) return;
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -902,7 +954,7 @@ function PlansTab({
             </Select>
           </Field>
           <Field label={t("cat.plan.portions")} required>
-            <Input inputMode="numeric" value={portions} onChange={(e) => setPortions(e.target.value)} placeholder="150" />
+            <Input inputMode="numeric" value={portions} onChange={(e) => setPortions(e.target.value)} placeholder={t("cat.plan.portionsPlaceholder")} />
           </Field>
           <div className="sm:col-span-2 lg:col-span-3">
             <Field label={t("cat.f.notes")} hint={t("cat.f.optional")}>
@@ -910,7 +962,7 @@ function PlansTab({
             </Field>
           </div>
           <div className="sm:col-span-2 lg:col-span-4">
-            <Button type="submit" disabled={!valid || busy}>
+            <Button type="submit" disabled={busy}>
               {t("cat.plan.create")}
             </Button>
           </div>
@@ -1165,7 +1217,13 @@ function BatchesTab({
   const [moving, setMoving] = useState<string | null>(null);
 
   const activeRecipes = recipes.filter((r) => r.isActive);
-  const valid = batchNumber.trim() !== "" && recipeCode !== "" && (qty.trim() === "" || isPositiveDecimal(qty));
+  const missing = [
+    batchNumber.trim() === "" ? t("cat.batch.number") : null,
+    recipeCode === "" ? t("cat.batch.recipe") : null,
+  ].filter((x): x is string => x !== null);
+  const invalid = [qty.trim() !== "" && !isPositiveDecimal(qty) ? t("cat.batch.outputQty") : null].filter(
+    (x): x is string => x !== null,
+  );
 
   /** Planned portions × recipe yield is the natural batch size for a plan. */
   function suggestQty(nextPlanId: string, nextRecipeCode: string) {
@@ -1176,7 +1234,15 @@ function BatchesTab({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!valid) return;
+    if (missing.length > 0 || invalid.length > 0) {
+      setNotice(null);
+      setError(
+        missing.length > 0
+          ? t("common.form.missing", { fields: missing.join(", ") })
+          : t("common.form.invalid", { fields: invalid.join(", ") }),
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -1185,7 +1251,7 @@ function BatchesTab({
         batchNumber: batchNumber.trim(),
         recipeCode,
         mealPlanId: planId || null,
-        ...(qty.trim() ? { outputQuantity: qty.trim() } : {}),
+        ...(qty.trim() ? { outputQuantity: normDecimal(qty) } : {}),
       });
       setNotice(t("cat.batch.created", { number: batch.batchNumber }));
       setBatchNumber("");
@@ -1294,7 +1360,7 @@ function BatchesTab({
             <Input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
           </Field>
           <div className="sm:col-span-2 lg:col-span-4">
-            <Button type="submit" disabled={!valid || busy}>
+            <Button type="submit" disabled={busy}>
               {t("cat.batch.create")}
             </Button>
           </div>

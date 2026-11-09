@@ -145,12 +145,33 @@ export function ProjectDeliveryAdvancedPlanningPage() {
   }, [projectId, token, asOfDate, t]);
 
   const wbsDraft = modal.kind === "create-wbs" ? modal.data : undefined;
-  const canCreateWbs = !!wbsDraft?.code?.trim() && !!wbsDraft?.name?.trim();
   const baselineDraft = modal.kind === "create-baseline" ? modal.data : undefined;
-  const canCreateBaseline = !!baselineDraft?.name?.trim();
+
+  // Validation message shown inside the open form (the page-level alert sits far above it).
+  const [formMsg, setFormMsg] = useState<string | null>(null);
+  useEffect(() => {
+    setFormMsg(null);
+  }, [modal.kind]);
+
+  const formProblem = (fields: Array<string | null>): boolean => {
+    const list = fields.filter((x): x is string => x !== null);
+    if (list.length === 0) return false;
+    setNotice(null);
+    setError(null);
+    setFormMsg(t("common.form.missing", { fields: list.join(", ") }));
+    return true;
+  };
 
   const createWbs = async () => {
-    if (!canCreateWbs) return;
+    if (
+      formProblem([
+        !wbsDraft?.code?.trim() ? t("pd.plan.f.code") : null,
+        !wbsDraft?.name?.trim() ? t("pd.plan.f.name") : null,
+      ])
+    ) {
+      return;
+    }
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     try {
@@ -171,7 +192,8 @@ export function ProjectDeliveryAdvancedPlanningPage() {
   };
 
   const createBaseline = async () => {
-    if (!canCreateBaseline) return;
+    if (formProblem([!baselineDraft?.name?.trim() ? t("pd.plan.f.name") : null])) return;
+    setFormMsg(null);
     setBusy(true);
     setError(null);
     try {
@@ -339,7 +361,21 @@ export function ProjectDeliveryAdvancedPlanningPage() {
             />
           </Field>
           <div className="flex items-end gap-2">
-            <Button onClick={() => load()} disabled={!projectId || loading}>
+            <Button
+              onClick={() => {
+                const missing = [
+                  !projectId ? t("pd.plan.f.project") : null,
+                  !asOfDate ? t("pd.plan.f.asOfDate") : null,
+                ].filter((x): x is string => x !== null);
+                if (missing.length > 0) {
+                  setNotice(null);
+                  setError(t("common.form.missing", { fields: missing.join(", ") }));
+                  return;
+                }
+                void load();
+              }}
+              disabled={loading}
+            >
               {loading ? <Spinner /> : "Load"}
             </Button>
           </div>
@@ -452,7 +488,7 @@ export function ProjectDeliveryAdvancedPlanningPage() {
           <div className="space-y-3">
             <Field label={t("pd.plan.f.code")} required>
               <Input
-                placeholder="WBS-001"
+                placeholder={t("common.form.example", { value: "WBS-001" })}
                 value={modal.data?.code ?? ""}
                 onChange={(e) => setModal({ ...modal, data: { ...modal.data, code: e.target.value } })}
               />
@@ -473,8 +509,13 @@ export function ProjectDeliveryAdvancedPlanningPage() {
               />
             </Field>
           </div>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canCreateWbs} onClick={() => createWbs()}>
+            <Button disabled={busy} onClick={() => createWbs()}>
               {t("common.create")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -490,7 +531,7 @@ export function ProjectDeliveryAdvancedPlanningPage() {
           <div className="space-y-3">
             <Field label={t("pd.plan.f.name")} required>
               <Input
-                placeholder="BL-001"
+                placeholder={t("common.form.example", { value: "BL-001" })}
                 value={modal.data?.name ?? ""}
                 onChange={(e) => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })}
               />
@@ -504,8 +545,13 @@ export function ProjectDeliveryAdvancedPlanningPage() {
               />
             </Field>
           </div>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canCreateBaseline} onClick={() => createBaseline()}>
+            <Button disabled={busy} onClick={() => createBaseline()}>
               {t("common.create")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>

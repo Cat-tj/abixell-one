@@ -684,7 +684,15 @@ function RevokeAssignmentDialog({
     trimmedReason.length === 0 || trimmedReason.length > MAX_REVOKE_REASON_LENGTH;
 
   async function confirmRevocation() {
-    if (inFlight.current || reasonInvalid) return;
+    if (inFlight.current) return;
+    if (reasonInvalid) {
+      setError(
+        trimmedReason.length === 0
+          ? t("common.form.missing", { fields: t("adminUsers.reasonField") })
+          : t("common.form.invalid", { fields: t("adminUsers.reasonField") }),
+      );
+      return;
+    }
     inFlight.current = true;
     setPending(true);
     setError(null);
@@ -728,7 +736,7 @@ function RevokeAssignmentDialog({
           </Button>
           <Button
             className="min-h-[44px]"
-            disabled={pending || reasonInvalid}
+            disabled={pending}
             onClick={() => void confirmRevocation()}
           >
             {pending ? t("adminUsers.revoking") : t("adminUsers.confirmRevoke")}

@@ -97,6 +97,11 @@ export function ServiceOptimizationPage() {
   }, [load]);
 
   async function handleGenerate() {
+    if (!targetDate) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: t("so.opt.f.targetScheduleDate") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -299,7 +304,7 @@ export function ServiceOptimizationPage() {
         </div>
 
         <div className="mt-4">
-          <Button disabled={busy || !targetDate} onClick={() => void handleGenerate()}>
+          <Button disabled={busy} onClick={() => void handleGenerate()}>
             {busy ? "Analyzing workload…" : "Generate Optimization Run"}
           </Button>
         </div>

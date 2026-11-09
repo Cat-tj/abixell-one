@@ -92,17 +92,31 @@ export function SuppliersPage() {
           </Field>
           <div className="flex items-end">
             <Button
-              disabled={busy || !code || !name}
+              disabled={busy}
               onClick={async () => {
+                const missing = [
+                  code.trim() ? null : t("msc.suppl.f.code"),
+                  name.trim() ? null : t("msc.suppl.f.name"),
+                ].filter((x): x is string => x !== null);
+                const emailBad = email.trim() !== "" && !/^\S+@\S+\.\S+$/.test(email.trim());
+                if (missing.length > 0 || emailBad) {
+                  setNotice(null);
+                  setError(
+                    missing.length > 0
+                      ? t("common.form.missing", { fields: missing.join(", ") })
+                      : t("common.form.invalid", { fields: t("msc.suppl.f.email") }),
+                  );
+                  return;
+                }
                 setBusy(true);
                 setError(null);
                 setNotice(null);
                 try {
                   await api.createSupplier(token, {
-                    code,
-                    name,
-                    contactName: contactName || null,
-                    email: email || null,
+                    code: code.trim(),
+                    name: name.trim(),
+                    contactName: contactName.trim() || null,
+                    email: email.trim() || null,
                   });
                   setNotice(t("msc.suppl.msg.supplierCreated"));
                   setCode("");

@@ -118,7 +118,13 @@ export function BackupTab({
           <Button
             variant="ghost"
             aria-label={triggering === job.jobCode ? t("backup.triggering") : t("backup.trigger")}
-            title={triggering === job.jobCode ? t("backup.triggering") : t("backup.trigger")}
+            title={
+              !canManage
+                ? t("backup.noPermission")
+                : triggering === job.jobCode
+                  ? t("backup.triggering")
+                  : t("backup.trigger")
+            }
             disabled={!canManage || triggering === job.jobCode}
             onClick={() => trigger(job.jobCode)}
             className="min-h-0 px-2 py-1"

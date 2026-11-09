@@ -102,9 +102,37 @@ export function ProcurementPage() {
   const itemMap = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const suppMap = useMemo(() => new Map(suppliers.map((s) => [s.id, s])), [suppliers]);
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+
   async function handleCreateRfq(e: React.FormEvent) {
     e.preventDefault();
-    if (!rfqTitle.trim() || !rfqItemId || Number(rfqQty) <= 0 || !rfqDeadline) return;
+    if (
+      !formOk(
+        [
+          rfqTitle.trim() ? null : t("scm.proc.f.rfqTitle"),
+          rfqDeadline ? null : t("scm.proc.f.submissionDeadline"),
+          rfqItemId ? null : t("scm.proc.f.targetItem"),
+          rfqQty.trim() ? null : t("scm.proc.f.quantityRequired"),
+        ],
+        [rfqQty.trim() && !(num(rfqQty) > 0) ? t("scm.proc.f.quantityRequired") : null],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -118,7 +146,7 @@ export function ProcurementPage() {
         items: [
           {
             itemId: rfqItemId,
-            targetQuantity: Number(rfqQty),
+            targetQuantity: num(rfqQty),
             specifications: rfqSpec.trim() || null,
           },
         ],
@@ -149,18 +177,33 @@ export function ProcurementPage() {
 
   async function handleSubmitBid(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedRfqDetail || !bidSupplierId || selectedRfqDetail.items.length === 0) return;
+    if (!selectedRfqDetail) return;
+    if (
+      !formOk(
+        [
+          bidSupplierId ? null : t("scm.proc.f.supplier"),
+          bidPrice.trim() ? null : t("scm.proc.f.unitPriceQuotedIdr"),
+          bidLeadDays.trim() ? null : t("scm.proc.f.leadTimeDays"),
+        ],
+        [
+          bidPrice.trim() && !(num(bidPrice) > 0) ? t("scm.proc.f.unitPriceQuotedIdr") : null,
+          bidLeadDays.trim() && !(num(bidLeadDays) >= 0) ? t("scm.proc.f.leadTimeDays") : null,
+        ],
+      )
+    )
+      return;
+    if (selectedRfqDetail.items.length === 0) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const item0 = selectedRfqDetail.items[0];
       const qty = item0.targetQuantity;
-      const unit = Number(bidPrice);
+      const unit = num(bidPrice);
       await api.submitScmSupplierBid(token, {
         rfqId: selectedRfqDetail.rfq.id,
         supplierId: bidSupplierId,
-        leadTimeDays: Number(bidLeadDays),
+        leadTimeDays: num(bidLeadDays),
         validUntil: selectedRfqDetail.rfq.submissionDeadline,
         notes: bidNotes.trim() || null,
         lines: [
@@ -238,6 +281,7 @@ export function ProcurementPage() {
 
       {error && <Alert tone="error">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
+      {!canManage && <Alert tone="info">{t("scm.proc.n.readOnly")}</Alert>}
       {loading && (
         <div className="flex justify-center py-6">
           <Spinner />
@@ -272,7 +316,7 @@ export function ProcurementPage() {
               <Field label={t("scm.proc.f.technicalSpecification")}>
                 <Input value={rfqSpec} onChange={(e) => setRfqSpec(e.target.value)} placeholder={t("scm.proc.p.minimum42uDualPdu")} disabled={!canManage || busy} />
               </Field>
-              <Button type="submit" variant="primary" disabled={!canManage || busy || !rfqTitle.trim() || !rfqItemId || Number(rfqQty) <= 0 || !rfqDeadline}>{t("scm.proc.t.publishRfq")}</Button>
+              <Button type="submit" variant="primary" disabled={!canManage || busy}>{t("scm.proc.t.publishRfq")}</Button>
             </form>
           </Card>
         </div>

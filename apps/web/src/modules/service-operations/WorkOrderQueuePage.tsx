@@ -78,6 +78,16 @@ export function WorkOrderQueuePage() {
   }, [token, t]);
 
   async function createWorkOrder() {
+    const missing = [
+      customerId ? null : t("mo.woq.f.customer"),
+      serviceCode ? null : t("mo.woq.f.serviceType"),
+      title.trim() ? null : t("mo.woq.f.title"),
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) {
+      setNotice(null);
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -85,7 +95,7 @@ export function WorkOrderQueuePage() {
       await api.createWorkOrder(token, {
         customerId,
         serviceDefinitionCode: serviceCode,
-        title,
+        title: title.trim(),
         description: description.trim() || null,
         priority: priority || null,
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
@@ -215,7 +225,7 @@ export function WorkOrderQueuePage() {
             <Field label={t("mo.woq.f.due")}>
               <Input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
             </Field>
-            <Button disabled={busy || !customerId || !serviceCode || !title} onClick={() => void createWorkOrder()}>
+            <Button disabled={busy} onClick={() => void createWorkOrder()}>
               {t("mo.woq.b.create")}
             </Button>
           </div>

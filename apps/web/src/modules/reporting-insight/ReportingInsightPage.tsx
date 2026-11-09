@@ -242,7 +242,10 @@ export function ReportingInsightPage() {
 
   // Standard report export
   const exportReport = async () => {
-    if (!selectedCode) return;
+    if (!selectedCode) {
+      setError(t("common.form.missing", { fields: t("ri.main.t.standardReport") }));
+      return;
+    }
     setExporting(true);
     setError(null);
     try {
@@ -266,7 +269,7 @@ export function ReportingInsightPage() {
   // BI Query execution
   const executeBiQuery = async () => {
     if (!selectedDatasetCode || (selectedDimensions.length === 0 && selectedMeasures.length === 0)) {
-      setBiError("Please select at least one dimension or measure.");
+      setBiError(t("common.form.missing", { fields: "Group By Dimensions / Aggregated Measures" }));
       return;
     }
     setBiExecuting(true);
@@ -289,7 +292,10 @@ export function ReportingInsightPage() {
 
   // BI Query CSV export
   const exportBiQuery = async () => {
-    if (!selectedDatasetCode) return;
+    if (!selectedDatasetCode || (selectedDimensions.length === 0 && selectedMeasures.length === 0)) {
+      setBiError(t("common.form.missing", { fields: "Group By Dimensions / Aggregated Measures" }));
+      return;
+    }
     setBiExporting(true);
     setBiError(null);
     const config: BiQueryConfig = {
@@ -319,7 +325,15 @@ export function ReportingInsightPage() {
   // Save BI report
   const handleSaveReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newReportTitle.trim() || !newReportCode.trim() || !selectedDatasetCode) return;
+    const missingFields = [
+      !newReportCode.trim() ? t("ri.main.t.reportCode") : null,
+      !newReportTitle.trim() ? t("ri.main.t.reportTitle") : null,
+    ].filter((label): label is string => label !== null);
+    if (missingFields.length > 0) {
+      setBiError(t("common.form.missing", { fields: missingFields.join(", ") }));
+      return;
+    }
+    if (!selectedDatasetCode) return;
     setSavingReport(true);
     setBiError(null);
     try {
@@ -355,6 +369,18 @@ export function ReportingInsightPage() {
 
   // Generate predictive forecast
   const handleGenerateForecast = async () => {
+    const invalidFields = [
+      !Number.isInteger(lookbackDays) || lookbackDays < 30 || lookbackDays > 365
+        ? `${t("ri.main.t.historicalLookbackDays")} (30-365)`
+        : null,
+      !Number.isInteger(forecastDays) || forecastDays < 1 || forecastDays > 30
+        ? `${t("ri.main.t.forecastHorizonDays")} (1-30)`
+        : null,
+    ].filter((label): label is string => label !== null);
+    if (invalidFields.length > 0) {
+      setPredictiveError(t("common.form.invalid", { fields: invalidFields.join(", ") }));
+      return;
+    }
     setForecastGenerating(true);
     setPredictiveError(null);
     try {
@@ -521,7 +547,7 @@ export function ReportingInsightPage() {
                     </label>
                     <Button
                       onClick={exportReport}
-                      disabled={!selectedCode || exporting}
+                      disabled={exporting}
                       variant="secondary"
                     >
                       {exporting ? "Exporting…" : "Export CSV"}
@@ -857,14 +883,14 @@ export function ReportingInsightPage() {
                       <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
                         <Button
                           onClick={exportBiQuery}
-                          disabled={biExporting || (selectedDimensions.length === 0 && selectedMeasures.length === 0)}
+                          disabled={biExporting}
                           variant="secondary"
                         >
                           {biExporting ? "Exporting CSV…" : "Export BI CSV"}
                         </Button>
                         <Button
                           onClick={executeBiQuery}
-                          disabled={biExecuting || (selectedDimensions.length === 0 && selectedMeasures.length === 0)}
+                          disabled={biExecuting}
                           variant="primary"
                         >
                           {biExecuting ? "Executing Query…" : "Run Governed Query"}
@@ -972,16 +998,7 @@ export function ReportingInsightPage() {
               <div className="flex items-end">
                 <Button
                   onClick={handleGenerateForecast}
-                  // Same bounds as the API (lookback 30-365, horizon 1-30 whole days).
-                  disabled={
-                    forecastGenerating ||
-                    !Number.isInteger(lookbackDays) ||
-                    lookbackDays < 30 ||
-                    lookbackDays > 365 ||
-                    !Number.isInteger(forecastDays) ||
-                    forecastDays < 1 ||
-                    forecastDays > 30
-                  }
+                  disabled={forecastGenerating}
                   variant="primary"
                   className="w-full sm:w-auto"
                 >

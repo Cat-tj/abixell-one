@@ -73,6 +73,16 @@ export function HseReportPage() {
   }, [token, t]);
 
   async function submit() {
+    const missing = [
+      title.trim() ? null : t("hse.common.title"),
+      occurredDate ? null : t("fin.common.date"),
+      occurredTime ? null : t("hse.common.time"),
+    ].filter((x): x is string => x !== null);
+    if (missing.length > 0) {
+      setError(t("common.form.missing", { fields: missing.join(", ") }));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -98,7 +108,6 @@ export function HseReportPage() {
     }
   }
 
-  const isValid = title.trim().length > 0 && Boolean(occurredDate) && Boolean(occurredTime);
 
   return (
     <div className="space-y-4">
@@ -194,7 +203,7 @@ export function HseReportPage() {
       </Card>
 
       <div className="flex gap-2">
-        <Button disabled={busy || !isValid || loading} onClick={() => void submit()}>
+        <Button disabled={busy || loading} onClick={() => void submit()}>
           {busy ? <Spinner /> : t("hse.report.submit")}
         </Button>
         <Button variant="secondary" onClick={() => navigate("/hse")}>

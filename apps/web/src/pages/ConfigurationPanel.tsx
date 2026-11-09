@@ -216,7 +216,10 @@ export function ConfigurationPanel({
 
   async function loadSequence() {
     const code = sequenceCode.trim();
-    if (!code) return;
+    if (!code) {
+      setSequenceError(t("common.form.missing", { fields: t("configPanel.sequenceCode") }));
+      return;
+    }
     setSequenceBusy(true);
     setSequenceError(null);
     try {
@@ -401,6 +404,7 @@ export function ConfigurationPanel({
               <Button
                 variant="secondary"
                 disabled={!selectedScope || !value}
+                title={!selectedScope || !value ? t("configPanel.overrideUnitHint") : undefined}
                 onClick={(event) => {
                   if (selectedScope && value)
                     open(
@@ -648,7 +652,7 @@ export function ConfigurationPanel({
                   />
                 </Field>
               </div>
-              <Button variant="secondary" onClick={() => void loadSequence()} disabled={!sequenceCode.trim() || sequenceBusy}>
+              <Button variant="secondary" onClick={() => void loadSequence()} disabled={sequenceBusy}>
                 {sequenceBusy ? t("configPanel.loading") : t("configPanel.load")}
               </Button>
             </div>

@@ -129,6 +129,20 @@ export function FinancePeriodsPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
+  // Validation message shown inside the open form (the page-level alert sits far above it).
+  const [formMsg, setFormMsg] = useState<string | null>(null);
+  useEffect(() => {
+    setFormMsg(null);
+  }, [modal.kind]);
+
+  function formProblem(kind: "missing" | "invalid", fields: Array<string | null>): boolean {
+    const list = fields.filter((x): x is string => x !== null);
+    if (list.length === 0) return false;
+    setNotice(null);
+    setError(null);
+    setFormMsg(t(kind === "missing" ? "common.form.missing" : "common.form.invalid", { fields: list.join(", ") }));
+    return true;
+  }
 
   // Lock modal state
   const [lockReason, setLockReason] = useState("");
@@ -215,6 +229,7 @@ export function FinancePeriodsPage() {
   }, [modal.kind, selectedReconciliationId, token, t]);
 
   async function lockPeriod(period: AccountingPeriodRecord) {
+    if (formProblem("missing", [lockReason.trim() === "" ? t("finTxDetail.reason") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -232,6 +247,14 @@ export function FinancePeriodsPage() {
   }
 
   async function requestReopen(period: AccountingPeriodRecord) {
+    if (
+      formProblem("missing", [
+        reopenReason.trim() === "" ? t("finTxDetail.reason") : null,
+        reopenImpactEvidence.trim() === "" ? t("finPeriods.impactEvidence") : null,
+      ])
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -253,6 +276,7 @@ export function FinancePeriodsPage() {
   }
 
   async function closeMonthEnd(period: AccountingPeriodRecord) {
+    if (formProblem("missing", ATTESTATIONS.filter((item) => !closeAttestation[item.key]).map((item) => t(item.labelKey)))) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -270,6 +294,7 @@ export function FinancePeriodsPage() {
   }
 
   async function closeYearEnd(period: AccountingPeriodRecord) {
+    if (formProblem("missing", ATTESTATIONS.filter((item) => !closeAttestation[item.key]).map((item) => t(item.labelKey)))) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -287,6 +312,16 @@ export function FinancePeriodsPage() {
   }
 
   async function createLedger() {
+    if (
+      formProblem("missing", [
+        ledgerCode.trim() === "" ? t("finPeriods.ledgerCode") : null,
+        ledgerName.trim() === "" ? t("finPeriods.ledgerName") : null,
+        ledgerCurrency.trim() === "" ? t("fin.common.currency") : null,
+      ])
+    ) {
+      return;
+    }
+    if (formProblem("invalid", [ledgerCurrency.trim().length !== 3 ? t("fin.common.currency") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -295,7 +330,7 @@ export function FinancePeriodsPage() {
         legalEntityId,
         ledgerCode: ledgerCode.trim(),
         ledgerName: ledgerName.trim(),
-        currency: ledgerCurrency.toUpperCase(),
+        currency: ledgerCurrency.trim().toUpperCase(),
       });
       setNotice(t("finPeriods.ledgerCreated", { code: ledger.ledgerCode }));
       setLedgerCode("");
@@ -311,6 +346,7 @@ export function FinancePeriodsPage() {
   }
 
   async function approveChart() {
+    if (formProblem("missing", [selectedChartId === "" ? t("finPeriods.chart") : null])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -328,6 +364,15 @@ export function FinancePeriodsPage() {
   }
 
   async function reverseBankMatch() {
+    if (
+      formProblem("missing", [
+        selectedBankAccountId === "" ? t("finPeriods.bankAccount") : null,
+        selectedReconciliationId === "" ? t("finPeriods.reconciliation") : null,
+        selectedMatchId === "" ? t("finPeriods.match") : null,
+      ])
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -450,29 +495,6 @@ export function FinancePeriodsPage() {
   ];
 
   const draftCharts = charts.filter((c) => c.coaStatus === "draft");
-  const canLock = modal.kind === "lock" ? lockReason.trim() !== "" : false;
-  const canReopen =
-    modal.kind === "reopen" ? reopenReason.trim() !== "" && reopenImpactEvidence.trim() !== "" : false;
-  const canCloseMonth =
-    modal.kind === "close-month"
-      ? closeAttestation.bankReconConfirmed &&
-        closeAttestation.apArConfirmed &&
-        closeAttestation.depreciationConfirmed &&
-        closeAttestation.accrualsConfirmed
-      : false;
-  const canCloseYear =
-    modal.kind === "close-year"
-      ? closeAttestation.bankReconConfirmed &&
-        closeAttestation.apArConfirmed &&
-        closeAttestation.depreciationConfirmed &&
-        closeAttestation.accrualsConfirmed
-      : false;
-  const canCreateLedger = modal.kind === "create-ledger" ? ledgerCode.trim() !== "" && ledgerName.trim() !== "" : false;
-  const canApproveChart = modal.kind === "approve-chart" ? selectedChartId !== "" : false;
-  const canReverseMatch =
-    modal.kind === "reverse-bank-match"
-      ? selectedBankAccountId !== "" && selectedReconciliationId !== "" && selectedMatchId !== ""
-      : false;
 
   return (
     <div className="space-y-4">
@@ -558,6 +580,7 @@ export function FinancePeriodsPage() {
               <Button
                 variant="secondary"
                 disabled={busy || draftCharts.length === 0}
+                title={draftCharts.length === 0 ? t("finPeriods.noDraftCharts") : undefined}
                 onClick={() => {
                   setModal({ kind: "approve-chart" });
                   setSelectedChartId("");
@@ -634,8 +657,13 @@ export function FinancePeriodsPage() {
               placeholder={t("finPeriods.lockReasonPlaceholder")}
             />
           </Field>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canLock} onClick={() => void lockPeriod(modal.period)}>
+            <Button disabled={busy} onClick={() => void lockPeriod(modal.period)}>
               {t("finPeriods.lock")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -666,8 +694,13 @@ export function FinancePeriodsPage() {
               placeholder={t("finPeriods.impactPlaceholder")}
             />
           </Field>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canReopen} onClick={() => void requestReopen(modal.period)}>
+            <Button disabled={busy} onClick={() => void requestReopen(modal.period)}>
               {t("finPeriods.submitRequest")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -684,8 +717,13 @@ export function FinancePeriodsPage() {
           </h2>
           <p className="mb-3 text-sm text-ink-dim">{t("finPeriods.closeMonthNote")}</p>
           <AttestationChecks t={t} value={closeAttestation} onChange={setCloseAttestation} />
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canCloseMonth} onClick={() => void closeMonthEnd(modal.period)}>
+            <Button disabled={busy} onClick={() => void closeMonthEnd(modal.period)}>
               {t("finPeriods.confirmClose")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -702,8 +740,13 @@ export function FinancePeriodsPage() {
           </h2>
           <p className="mb-3 text-sm text-ink-dim">{t("finPeriods.closeYearNote")}</p>
           <AttestationChecks t={t} value={closeAttestation} onChange={setCloseAttestation} />
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canCloseYear} onClick={() => void closeYearEnd(modal.period)}>
+            <Button disabled={busy} onClick={() => void closeYearEnd(modal.period)}>
               {t("finPeriods.confirmClose")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -718,7 +761,7 @@ export function FinancePeriodsPage() {
           <h2 className="mb-3 text-sm font-semibold text-ink">{t("finPeriods.createLedger")}</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label={t("finPeriods.ledgerCode")} required>
-              <Input value={ledgerCode} onChange={(e) => setLedgerCode(e.target.value)} placeholder="GL-PRIMARY" />
+              <Input value={ledgerCode} onChange={(e) => setLedgerCode(e.target.value)} placeholder={t("common.form.example", { value: "GL-PRIMARY" })} />
             </Field>
             <Field label={t("finPeriods.ledgerName")} required>
               <Input
@@ -735,8 +778,13 @@ export function FinancePeriodsPage() {
               />
             </Field>
           </div>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canCreateLedger} onClick={() => void createLedger()}>
+            <Button disabled={busy} onClick={() => void createLedger()}>
               {t("finPeriods.createLedger")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -762,8 +810,13 @@ export function FinancePeriodsPage() {
               ))}
             </Select>
           </Field>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canApproveChart} onClick={() => void approveChart()}>
+            <Button disabled={busy} onClick={() => void approveChart()}>
               {t("finPeriods.approveChart")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>
@@ -834,8 +887,13 @@ export function FinancePeriodsPage() {
               placeholder={t("finPeriods.reverseReasonPlaceholder")}
             />
           </Field>
+          {formMsg ? (
+            <div className="mt-3">
+              <Alert tone="error">{formMsg}</Alert>
+            </div>
+          ) : null}
           <div className="mt-3 flex gap-2">
-            <Button disabled={busy || !canReverseMatch} onClick={() => void reverseBankMatch()}>
+            <Button disabled={busy} onClick={() => void reverseBankMatch()}>
               {t("finPeriods.reverseMatch")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setModal({ kind: "none" })}>

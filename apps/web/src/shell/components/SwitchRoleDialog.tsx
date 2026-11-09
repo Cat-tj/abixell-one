@@ -100,7 +100,13 @@ export function SwitchRoleDialog({
   }
 
   async function handleSwitch() {
-    if (!assignmentId || assignmentId === currentAssignmentId) {
+    if (!assignmentId) {
+      setError(
+        t("common.form.missing", { fields: `${t("switchRole.role")}, ${t("switchRole.site")}` }),
+      );
+      return;
+    }
+    if (assignmentId === currentAssignmentId) {
       onClose();
       return;
     }
@@ -178,7 +184,7 @@ export function SwitchRoleDialog({
                 ref={submitButtonRef}
                 type="button"
                 onClick={() => void handleSwitch()}
-                disabled={!assignmentId || pending}
+                disabled={pending}
               >
                 {pending ? t("switchRole.pending") : t("switchRole.submit")}
               </Button>

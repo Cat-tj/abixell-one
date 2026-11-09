@@ -281,8 +281,13 @@ export function FinanceTransactionDetailPage() {
           </div>
           <div className="mt-3">
             <Button
-              disabled={busy || !confirmReversal}
+              disabled={busy}
               onClick={async () => {
+                if (!confirmReversal) {
+                  setNotice(null);
+                  setError(t("common.form.missing", { fields: t("finTxDetail.confirmCorrection") }));
+                  return;
+                }
                 setBusy(true);
                 setError(null);
                 setNotice(null);

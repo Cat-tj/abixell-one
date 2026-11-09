@@ -99,15 +99,43 @@ export function ValuationPage() {
   const whMap = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
   const poMap = useMemo(() => new Map(pos.map((p) => [p.id, p])), [pos]);
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+
   async function handleCreateLandedCost(e: React.FormEvent) {
     e.preventDefault();
-    if (!lcPoId || items.length === 0) return;
+    if (
+      !formOk(
+        [
+          lcPoId ? null : t("scm.val.f.targetPurchaseOrder"),
+          lcCostType.trim() ? null : t("scm.val.f.costType"),
+          lcFreight.trim() ? null : t("scm.val.f.amountIdr"),
+        ],
+        [lcFreight.trim() && !(num(lcFreight) > 0) ? t("scm.val.f.amountIdr") : null],
+      )
+    )
+      return;
+    if (!formOk([items.length > 0 ? null : t("scm.val.h.item")])) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const targetItem = items[0];
-      const allocAmount = Number(lcFreight) || 0;
+      const allocAmount = num(lcFreight) || 0;
       await api.createScmLandedCost(token, {
         purchaseOrderId: lcPoId,
         costType: lcCostType,
@@ -202,6 +230,7 @@ export function ValuationPage() {
 
       {error && <Alert tone="error">{error}</Alert>}
       {notice && <Alert tone="success">{notice}</Alert>}
+      {!canManage && <Alert tone="info">{t("scm.val.n.readOnly")}</Alert>}
 
       <div className="flex gap-2 border-b border-slate-200 pb-2">
         <Button variant={tab === "layers" ? "primary" : "secondary"} onClick={() => { setTab("layers"); setSelectedLandedCost(null); }}>{t("scm.val.t.fifoValuationLayers")}</Button>
@@ -260,7 +289,7 @@ export function ValuationPage() {
                   <Field label={t("scm.val.f.voucherNotes")}>
                     <Input value={lcNotes} onChange={(e) => setLcNotes(e.target.value)} placeholder={t("scm.val.p.customsBillBLReference")} disabled={!canManage || busy} />
                   </Field>
-                  <Button type="submit" variant="primary" disabled={!canManage || busy || !(Number(lcFreight) > 0)}>{t("scm.val.t.generateVoucher")}</Button>
+                  <Button type="submit" variant="primary" disabled={!canManage || busy}>{t("scm.val.t.generateVoucher")}</Button>
                 </form>
               </Card>
             </div>

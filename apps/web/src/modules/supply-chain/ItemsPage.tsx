@@ -90,7 +90,24 @@ export function ItemsPage() {
     [token, t],
   );
 
-  async function run(action: () => Promise<unknown>, successMessage: string) {
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const num = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+
+  async function run(action: () => Promise<unknown>, successMessage: string): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -99,11 +116,20 @@ export function ItemsPage() {
       setNotice(successMessage);
       await load();
       if (selected) await openItem(selected);
+      return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("msc.items.msg.actionFailed"));
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  function qtyOk(): boolean {
+    return formOk(
+      [quantity.trim() ? null : t("msc.items.f.quantity")],
+      [quantity.trim() && !(num(quantity) > 0) ? t("msc.items.f.quantity") : null],
+    );
   }
 
   /** Total across every stock location for this item. */
@@ -151,14 +177,25 @@ export function ItemsPage() {
           </Field>
           <div className="flex items-end">
             <Button
-              disabled={busy || !code || !name || !uom}
+              disabled={busy}
               onClick={async () => {
-                await run(
-                  () => api.createScmItem(token, { code, name, unitOfMeasure: uom, grade }),
+                if (
+                  !formOk([
+                    code.trim() ? null : t("msc.items.f.code"),
+                    name.trim() ? null : t("msc.items.f.name"),
+                    uom.trim() ? null : t("msc.items.f.unitOfMeasure"),
+                  ])
+                )
+                  return;
+                const ok = await run(
+                  () =>
+                    api.createScmItem(token, { code: code.trim(), name: name.trim(), unitOfMeasure: uom.trim(), grade }),
                   "Item created.",
                 );
-                setCode("");
-                setName("");
+                if (ok) {
+                  setCode("");
+                  setName("");
+                }
               }}
             >
               {t("common.create")}
@@ -206,36 +243,38 @@ export function ItemsPage() {
               </Field>
               <div className="flex items-end gap-2">
                 <Button
-                  disabled={busy || !(Number(quantity) > 0)}
+                  disabled={busy}
                   onClick={async () => {
-                    await run(
+                    if (!qtyOk()) return;
+                    const ok = await run(
                       () =>
                         api.recordGoodsIn(token, {
                           itemCode: selected.code,
-                          quantity: Number(quantity),
+                          quantity: num(quantity),
                           reference: reference || null,
                         }),
                       "Goods received.",
                     );
-                    setQuantity("");
+                    if (ok) setQuantity("");
                   }}
                 >
                   Receive
                 </Button>
                 <Button
                   variant="secondary"
-                  disabled={busy || !(Number(quantity) > 0)}
+                  disabled={busy}
                   onClick={async () => {
-                    await run(
+                    if (!qtyOk()) return;
+                    const ok = await run(
                       () =>
                         api.recordGoodsOut(token, {
                           itemCode: selected.code,
-                          quantity: Number(quantity),
+                          quantity: num(quantity),
                           reference: reference || null,
                         }),
                       "Goods issued.",
                     );
-                    setQuantity("");
+                    if (ok) setQuantity("");
                   }}
                 >
                   Issue

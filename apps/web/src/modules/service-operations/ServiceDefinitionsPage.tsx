@@ -86,6 +86,14 @@ export function ServiceDefinitionsPage() {
     }
   }
 
+  function formMissing(fields: Array<string | null>): boolean {
+    const m = fields.filter((x): x is string => x !== null);
+    if (m.length === 0) return false;
+    setNotice(null);
+    setError(t("common.form.missing", { fields: m.join(", ") }));
+    return true;
+  }
+
   const columns: Column<ServiceDefinition>[] = [
     { header: t("mo.defs.h.code"), cell: (row) => <span className="font-medium">{row.code}</span> },
     { header: t("mo.defs.h.name"), cell: (row) => row.name },
@@ -116,9 +124,13 @@ export function ServiceDefinitionsPage() {
           </Field>
           <div className="flex items-end">
             <Button
-              disabled={busy || !code || !name}
+              disabled={busy}
               onClick={async () => {
-                await run(() => api.createServiceDefinition(token, { code, name }), "Service type created.");
+                if (formMissing([code.trim() ? null : t("mo.defs.f.code"), name.trim() ? null : t("mo.defs.f.name")])) return;
+                await run(
+                  () => api.createServiceDefinition(token, { code: code.trim(), name: name.trim() }),
+                  "Service type created.",
+                );
                 setCode("");
                 setName("");
                 await load();
@@ -177,13 +189,17 @@ export function ServiceDefinitionsPage() {
               </label>
               <Button
                 variant="secondary"
-                disabled={busy || !itemCode || !itemLabel}
+                disabled={busy}
                 onClick={async () => {
+                  if (
+                    formMissing([itemCode.trim() ? null : t("mo.defs.f.itemCode"), itemLabel.trim() ? null : t("mo.defs.f.label")])
+                  )
+                    return;
                   await run(
                     () =>
                       api.addServiceChecklistItem(token, selected, {
-                        code: itemCode,
-                        label: itemLabel,
+                        code: itemCode.trim(),
+                        label: itemLabel.trim(),
                         isRequired: itemRequired,
                         sortOrder: checklist.length + 1,
                       }),

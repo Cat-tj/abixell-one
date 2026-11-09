@@ -54,7 +54,11 @@ export function DocumentsTab({
   }, [load]);
 
   const upload = async () => {
-    if (!file || uploading) return;
+    if (uploading) return;
+    if (!file) {
+      onMessage({ type: "error", text: t("common.form.missing", { fields: t("documents.uploadLabel") }) });
+      return;
+    }
     setUploading(true);
     try {
       await api.uploadDocument(token, "demo_transaction", tenantId, file);
@@ -79,7 +83,7 @@ export function DocumentsTab({
             <Field label={t("documents.uploadLabel")} hint={t("documents.uploadHint")}>
               <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </Field>
-            <Button disabled={!file || uploading} onClick={upload}>
+            <Button disabled={uploading} onClick={upload}>
               {uploading ? t("documents.uploading") : t("documents.upload")}
             </Button>
           </div>

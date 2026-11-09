@@ -135,15 +135,39 @@ export function AssetPerformancePage() {
     void load();
   }, [load]);
 
+  /** Shows what is missing/invalid and returns false when the form cannot be sent. */
+  function formOk(missing: Array<string | null>, invalid: Array<string | null> = []): boolean {
+    const m = missing.filter((x): x is string => x !== null);
+    const i = invalid.filter((x): x is string => x !== null);
+    if (m.length === 0 && i.length === 0) return true;
+    setNotice(null);
+    setError(
+      m.length > 0
+        ? t("common.form.missing", { fields: m.join(", ") })
+        : t("common.form.invalid", { fields: i.join(", ") }),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return false;
+  }
+
+  const meterValue = Number(readingValue.replace(/\s/g, "").replace(",", "."));
+
   async function recordMeter() {
     if (!assetId || !canManageMeters) return;
+    if (
+      !formOk(
+        [readingValue.trim() ? null : t("sca.perf.f.value")],
+        [readingValue.trim() && (Number.isNaN(meterValue) || meterValue < 0) ? t("sca.perf.f.value") : null],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       await api.recordAssetMeterReading(token, assetId, {
         readingType,
-        readingValue: Number(readingValue),
+        readingValue: meterValue,
         readingDate: readingDate ? new Date(readingDate).toISOString() : undefined,
         notes: meterNotes || null,
       });
@@ -160,6 +184,13 @@ export function AssetPerformancePage() {
 
   async function recordDowntime() {
     if (!assetId || !canManageDowntime) return;
+    if (
+      !formOk(
+        [downtimeStart ? null : t("sca.perf.f.startTime")],
+        [downtimeStart && downtimeEnd && downtimeEnd < downtimeStart ? t("sca.perf.f.endTimeOptional") : null],
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -406,7 +437,7 @@ export function AssetPerformancePage() {
                 </Field>
               </div>
               <div className="sm:col-span-3">
-                <Button disabled={busy || !readingValue} onClick={() => void recordMeter()}>
+                <Button disabled={busy} onClick={() => void recordMeter()}>
                   Record Monotonic Reading
                 </Button>
               </div>
@@ -445,7 +476,7 @@ export function AssetPerformancePage() {
                 <Input value={downtimeNotes} onChange={(e) => setDowntimeNotes(e.target.value)} />
               </Field>
               <div className="sm:col-span-2">
-                <Button disabled={busy || !downtimeStart} onClick={() => void recordDowntime()}>
+                <Button disabled={busy} onClick={() => void recordDowntime()}>
                   Record Downtime
                 </Button>
               </div>
