@@ -24,13 +24,13 @@
   "dependencies": {
     "@fastify/cors": "^10.0.1",
     "@fastify/helmet": "^13.1.0",
-    "@fastify/multipart": "^10.1.1",
-    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/multipart": "^10.1.8",
+    "@fastify/rate-limit": "^11.2.2",
     "@fastify/sensible": "^6.0.1",
     "ajv": "^8.17.1",
     "bcryptjs": "^2.4.3",
-    "dotenv": "^18.0.8",
-    "fastify": "^5.0.0",
+    "dotenv": "^18.0.9",
+    "fastify": "^5.12.8",
     "jsonwebtoken": "^9.0.2",
     "node-pg-migrate": "^9.0.0",
     "pg": "^8.12.0",
@@ -46,7 +46,7 @@
     "eslint": "^9.9.1",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4",
-    "typescript-eslint": "^8.3.0",
-    "vitest": "^5.0.5"
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
   }
 }
