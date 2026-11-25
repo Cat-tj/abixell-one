@@ -37,7 +37,7 @@
     "migrate:generate": "npm run migrate:generate -w apps/api"
   },
   "devDependencies": {
-    "prettier": "^3.3.3"
+    "prettier": "^3.10.1"
   },
   "overrides": {
     "vite": "^8.3.5"
